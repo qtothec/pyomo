@@ -15,7 +15,7 @@ def solve_NLP(nlp_model, solve_data, config):
     config.logger.info(
         'Solving nonlinear subproblem for '
         'fixed binaries and logical realizations.')
-    if any(v for v in nlp_model.component_data_objects(
+    if any(True for v in nlp_model.component_data_objects(
         ctype=Var, descend_into=(Block, Disjunct), active=True)
         if (v.is_binary() or v.is_integer()) and not v.fixed
     ):
@@ -52,7 +52,7 @@ def solve_NLP(nlp_model, solve_data, config):
         TransformationFactory(xfrm).apply_to(nlp_model)
 
     # restore original variable values
-    for var, old_value in zip(GDPopt.initial_var_list,
+    for var, old_value in zip(GDPopt.working_var_list,
                               GDPopt.initial_var_values):
         if not var.fixed and not var.is_binary():
             if old_value is not None:
@@ -75,10 +75,12 @@ def solve_NLP(nlp_model, solve_data, config):
     subprob_terminate_cond = results.solver.termination_condition
     if subprob_terminate_cond is tc.optimal:
         nlp_feasible = True
+        nlp_model.solutions.load_from(results)
     elif subprob_terminate_cond is tc.infeasible:
         config.logger.info('NLP subproblem was locally infeasible.')
         # Suppress the warning message by setting solver status to ok.
         results.solver.status = SolverStatus.ok
+        nlp_model.solutions.load_from(results)
         nlp_feasible = False
     elif subprob_terminate_cond is tc.maxIterations:
         # TODO try something else? Reinitialize with different initial
@@ -86,6 +88,7 @@ def solve_NLP(nlp_model, solve_data, config):
         config.logger.info(
             'NLP subproblem failed to converge within iteration limit.')
         results.solver.status = SolverStatus.ok
+        nlp_model.solutions.load_from(results)
         if is_feasible(nlp_model, config):
             config.logger.info(
                 'NLP solution is still feasible. '
@@ -99,51 +102,60 @@ def solve_NLP(nlp_model, solve_data, config):
             'condition of %s. Results: %s'
             % (subprob_terminate_cond, results))
 
-    nlp_model.solutions.load_from(results)
-
     # Call the NLP post-solve callback
     config.subprob_postsolve(nlp_model, solve_data)
+
+    # if feasible, call the NLP post-feasible callback
+    if nlp_feasible:
+        config.subprob_postfeas(nlp_model, solve_data)
 
     return (
         nlp_feasible,  # If solution is feasible.
         # Variable values
-        list((v.value if not v.stale else None)
-             for v in GDPopt.initial_var_list),
+        list(v.value for v in GDPopt.working_var_list),
         # Dual values
         list(nlp_model.dual.get(c, None)
-             for c in GDPopt.initial_constraints_list))
+             for c in GDPopt.working_constraints_list))
 
 
-def update_nlp_progress_indicators(model, solve_data, config):
+def update_nlp_progress_indicators(solved_model, solve_data, config):
     """Update the progress indicators for the NLP subproblem."""
-    GDPopt = model.GDPopt_utils
+    GDPopt = solved_model.GDPopt_utils
     if GDPopt.objective.sense == minimize:
+        old_UB = solve_data.UB
         solve_data.UB = min(
             value(GDPopt.objective.expr), solve_data.UB)
-        solve_data.solution_improved = (
-            solve_data.UB < solve_data.UB_progress[-1])
-        solve_data.UB_progress.append(solve_data.UB)
+        solve_data.feasible_solution_improved = (solve_data.UB < old_UB)
     else:
+        old_LB = solve_data.LB
         solve_data.LB = max(
             value(GDPopt.objective.expr), solve_data.LB)
-        solve_data.solution_improved = (
-            solve_data.LB > solve_data.LB_progress[-1])
-        solve_data.LB_progress.append(solve_data.LB)
+        solve_data.feasible_solution_improved = (solve_data.LB > old_LB)
+    solve_data.iteration_log[
+        (solve_data.master_iteration,
+         solve_data.mip_iteration,
+         solve_data.nlp_iteration)
+    ] = (
+        value(GDPopt.objective.expr),
+        value(GDPopt.objective.expr),
+        [v.value for v in GDPopt.working_var_list]
+    )
 
-    if solve_data.solution_improved:
+    if solve_data.feasible_solution_improved:
         solve_data.best_solution_found = [
-            v.value for v in GDPopt.initial_var_list]
+            v.value for v in GDPopt.working_var_list]
 
     improvement_tag = (
-        "(IMPROVED) " if solve_data.solution_improved else "")
+        "(IMPROVED) " if solve_data.feasible_solution_improved else "")
     lb_improved, ub_improved = (
         ("", improvement_tag)
         if solve_data.objective_sense == minimize
         else (improvement_tag, ""))
     config.logger.info(
-        'ITER %s.%s-NLP: OBJ: %s  LB: %s %s UB: %s %s'
+        'ITER %s.%s.%s-NLP: OBJ: %s  LB: %s %s UB: %s %s'
         % (solve_data.master_iteration,
-           solve_data.subproblem_iteration,
+           solve_data.mip_iteration,
+           solve_data.nlp_iteration,
            value(GDPopt.objective.expr),
            solve_data.LB, lb_improved,
            solve_data.UB, ub_improved))
