@@ -30,22 +30,33 @@ from pyomo.common.config import (ConfigBlock, ConfigList, ConfigValue, In,
                                  NonNegativeFloat, NonNegativeInt)
 from pyomo.contrib.gdpopt.cut_generation import (add_integer_cut,
                                                  add_outer_approximation_cuts)
-from pyomo.contrib.gdpopt.loa import solve_LOA_subproblem, solve_OA_master
+from pyomo.contrib.gdpopt.loa import solve_LOA_subproblem, solve_LOA_master
+from pyomo.contrib.gdpopt.gloa import solve_GLOA_master, solve_global_NLP
 from pyomo.contrib.gdpopt.master_initialize import (init_custom_disjuncts,
                                                     init_max_binaries,
                                                     init_set_covering)
-from pyomo.contrib.gdpopt.util import (GDPoptSolveData, _DoNothing,
-                                       _record_problem_statistics, a_logger,
+from pyomo.contrib.gdpopt.util import (GDPoptSolveData, _DoNothing, a_logger,
                                        algorithm_should_terminate,
                                        build_ordered_component_lists,
                                        clone_orig_model_with_lists,
                                        copy_var_list_values, model_is_valid,
+                                       record_original_model_statistics,
+                                       record_working_model_statistics,
                                        reformulate_integer_variables)
 from pyomo.core.base import Block, ConstraintList, Suffix, value
 from pyomo.core.kernel import ComponentMap
 from pyomo.opt.base import IOptSolver
 
 __version__ = (0, 3, 0)
+
+# Valid initialization strategies
+valid_init_strategies = {
+    None: _DoNothing,
+    'set_covering': init_set_covering,
+    'max_binary': init_max_binaries,
+    'fixed_binary': None,
+    'custom_disjuncts': init_custom_disjuncts
+}
 
 
 class GDPoptSolver(pyomo.common.plugin.Plugin):
@@ -65,12 +76,11 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
         description="Iteration limit."
     ))
     CONFIG.declare("strategy", ConfigValue(
-        default="LOA", domain=In(["LOA"]),
+        default="LOA", domain=In(["LOA", "GLOA"]),
         description="Decomposition strategy to use."
     ))
     CONFIG.declare("init_strategy", ConfigValue(
-        default="set_covering", domain=In([
-            "set_covering", "max_binary", "fixed_binary", "custom_disjuncts"]),
+        default="set_covering", domain=In(valid_init_strategies.keys()),
         description="Initialization strategy to use.",
         doc="""Selects the initialization strategy to use when generating
         the initial cuts to construct the master problem."""
@@ -198,6 +208,7 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
         config = self.CONFIG(kwds.pop('options', {}))
         config.set_value(kwds)
         solve_data = GDPoptSolveData()
+        created_GDPopt_block = False
 
         old_logger_level = config.logger.getEffectiveLevel()
         try:
@@ -214,6 +225,7 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
                     "on the model object, but an attribute with that name "
                     "already exists.")
             else:
+                created_GDPopt_block = True
                 model.GDPopt_utils = Block(
                     doc="Container for GDPopt solver utility modeling objects")
 
@@ -221,6 +233,7 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
 
             solve_data.working_model = clone_orig_model_with_lists(model)
             GDPopt = solve_data.working_model.GDPopt_utils
+            record_original_model_statistics(solve_data, config)
 
             solve_data.current_strategy = config.strategy
 
@@ -230,8 +243,7 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
             # Save ordered lists of main modeling components, so that data can
             # be easily transferred between future model clones.
             build_ordered_component_lists(solve_data.working_model)
-            _record_problem_statistics(
-                solve_data.working_model, solve_data, config)
+            record_working_model_statistics(solve_data, config)
             solve_data.results.solver.name = 'GDPopt ' + str(self.version())
 
             # Save model initial values. These are used later to initialize NLP
@@ -304,6 +316,8 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
 
         finally:
             config.logger.setLevel(old_logger_level)
+            if created_GDPopt_block:
+                model.del_component('GDPopt_utils')
 
     def _GDPopt_initialize_master(self, solve_data, config):
         """Initialize the decomposition algorithm.
@@ -326,12 +340,6 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
             c.deactivate()
 
         # Initialization strategies
-        valid_init_strategies = {
-            'set_covering': init_set_covering,
-            'max_binary': init_max_binaries,
-            'fixed_binary': None,
-            'custom_disjuncts': init_custom_disjuncts
-        }
         init_strategy = valid_init_strategies.get(config.init_strategy, None)
         if init_strategy is not None:
             init_strategy(solve_data, config)
@@ -358,19 +366,26 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
                 % solve_data.master_iteration)
             # solve MILP master problem
             if solve_data.current_strategy == 'LOA':
-                mip_results = solve_OA_master(solve_data, config)
-                if mip_results:
-                    _, mip_var_values = mip_results
+                mip_results = solve_LOA_master(solve_data, config)
+            elif solve_data.current_strategy == 'GLOA':
+                mip_results = solve_GLOA_master(solve_data, config)
+            if mip_results:
+                _, mip_var_values = mip_results
             # Check termination conditions
             if algorithm_should_terminate(solve_data, config):
                 break
             # Solve NLP subproblem
-            nlp_result = solve_LOA_subproblem(
-                mip_var_values, solve_data, config)
-            nlp_feasible, nlp_var_values, nlp_duals = nlp_result
-            if nlp_feasible:
-                add_outer_approximation_cuts(
-                    nlp_var_values, nlp_duals, solve_data, config)
+            if solve_data.current_strategy == 'LOA':
+                nlp_result = solve_LOA_subproblem(
+                    mip_var_values, solve_data, config)
+                nlp_feasible, nlp_var_values, nlp_duals = nlp_result
+                if nlp_feasible:
+                    add_outer_approximation_cuts(
+                        nlp_var_values, nlp_duals, solve_data, config)
+            elif solve_data.current_strategy == 'GLOA':
+                nlp_result = solve_global_NLP(
+                    mip_var_values, solve_data, config)
+                # TODO add affine cuts
             add_integer_cut(
                 mip_var_values, solve_data, config, feasible=nlp_feasible)
 

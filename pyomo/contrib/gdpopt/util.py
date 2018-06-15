@@ -247,13 +247,13 @@ def build_ordered_component_lists(model, prefix='working'):
             if v.body.polynomial_degree() not in (0, 1)])
 
 
-def _record_problem_statistics(model, solve_data, config):
+def record_original_model_statistics(solve_data, config):
+    """Record problem statistics for original model and setup SolverResults."""
     # Create the solver results object
     res = solve_data.results = SolverResults()
     prob = res.problem
-    GDPopt = model.GDPopt_utils
     origGDPopt = solve_data.original_model.GDPopt_utils
-    res.problem.name = model.name
+    res.problem.name = solve_data.working_model.name
     res.problem.number_of_nonzeros = None  # TODO
     # TODO work on termination condition and message
     res.solver.termination_condition = None
@@ -269,16 +269,11 @@ def _record_problem_statistics(model, solve_data, config):
     orig_continuous = sum(
         1 for v in origGDPopt.orig_var_list if v.is_continuous())
     orig_integer = sum(1 for v in origGDPopt.orig_var_list if v.is_integer())
-    now_binary = sum(1 for v in GDPopt.working_var_list if v.is_binary())
-    now_continuous = sum(
-        1 for v in GDPopt.working_var_list if v.is_continuous())
-    now_integer = sum(1 for v in GDPopt.working_var_list if v.is_integer())
-    assert now_integer == 0, "Unreformulated, unfixed integer variables found."
 
     # Get count of constraints and variables
-    prob.number_of_constraints = len(GDPopt.orig_constraints_list)
-    prob.number_of_disjunctions = len(GDPopt.orig_disjunctions_list)
-    prob.number_of_variables = len(GDPopt.orig_var_list)
+    prob.number_of_constraints = len(origGDPopt.orig_constraints_list)
+    prob.number_of_disjunctions = len(origGDPopt.orig_disjunctions_list)
+    prob.number_of_variables = len(origGDPopt.orig_var_list)
     prob.number_of_binary_variables = orig_binary
     prob.number_of_continuous_variables = orig_continuous
     prob.number_of_integer_variables = orig_integer
@@ -289,12 +284,22 @@ def _record_problem_statistics(model, solve_data, config):
         "with %s variables, of which %s are binary, %s are integer, "
         "and %s are continuous." %
         (prob.number_of_constraints,
-         len(GDPopt.orig_nonlinear_constraints),
+         len(origGDPopt.orig_nonlinear_constraints),
          prob.number_of_disjunctions,
          prob.number_of_variables,
          orig_binary,
          orig_integer,
          orig_continuous))
+
+
+def record_working_model_statistics(solve_data, config):
+    """Record problem statistics for preprocessed model."""
+    GDPopt = solve_data.working_model.GDPopt_utils
+    now_binary = sum(1 for v in GDPopt.working_var_list if v.is_binary())
+    now_continuous = sum(
+        1 for v in GDPopt.working_var_list if v.is_continuous())
+    now_integer = sum(1 for v in GDPopt.working_var_list if v.is_integer())
+    assert now_integer == 0, "Unreformulated, unfixed integer variables found."
 
     config.logger.info(
         "After preprocessing, model has %s constraints (%s nonlinear) "
@@ -455,3 +460,28 @@ def algorithm_should_terminate(solve_data, config):
             'Exiting iteration loop.')
         return True
     return False
+
+
+def copy_and_fix_mip_values_to_nlp(var_list, val_list, config):
+    """Copy MIP solution values to the corresponding NLP variable list.
+
+    Fix binary variables and optionally round their values.
+
+    """
+    for var, val in zip(var_list, val_list):
+        if val is None:
+            continue
+        if not var.is_binary():
+            var.value = val
+        elif ((fabs(val) > config.integer_tolerance and
+               fabs(val - 1) > config.integer_tolerance)):
+            raise ValueError(
+                "Binary variable %s value %s is not "
+                "within tolerance %s of 0 or 1." %
+                (var.name, var.value, config.integer_tolerance))
+        else:
+            # variable is binary and within tolerances
+            if config.round_NLP_binaries:
+                var.fix(int(round(val)))
+            else:
+                var.fix(val)

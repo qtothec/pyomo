@@ -4,8 +4,9 @@ in Logic-based outer approximation.
 from __future__ import division
 
 from pyomo.contrib.gdpopt.util import is_feasible
-from pyomo.core import Block, TransformationFactory, Var, minimize, value
-from pyomo.gdp import Disjunct
+from pyomo.core import Constraint, TransformationFactory, minimize, value
+from pyomo.core.expr import current as EXPR
+from pyomo.core.kernel import ComponentSet
 from pyomo.opt import TerminationCondition as tc
 from pyomo.opt import SolverFactory, SolverStatus
 
@@ -15,14 +16,9 @@ def solve_NLP(nlp_model, solve_data, config):
     config.logger.info(
         'Solving nonlinear subproblem for '
         'fixed binaries and logical realizations.')
-    if any(True for v in nlp_model.component_data_objects(
-        ctype=Var, descend_into=(Block, Disjunct), active=True)
-        if (v.is_binary() or v.is_integer()) and not v.fixed
-    ):
-        discrete_var_names = list(
-            v.name for v in nlp_model.component_data_objects(
-                ctype=Var, descend_into=(Block, Disjunct), active=True)
-            if (v.is_binary() or v.is_integer()) and not v.fixed)
+    unfixed_discrete_vars = detect_unfixed_discrete_vars(nlp_model)
+    if unfixed_discrete_vars:
+        discrete_var_names = list(v.name for v in unfixed_discrete_vars)
         config.logger.warning(
             "Unfixed discrete variables exist on the NLP subproblem: %s"
             % (discrete_var_names,))
@@ -51,17 +47,7 @@ def solve_NLP(nlp_model, solve_data, config):
     for xfrm in preprocessing_transformations:
         TransformationFactory(xfrm).apply_to(nlp_model)
 
-    # restore original variable values
-    for var, old_value in zip(GDPopt.working_var_list,
-                              GDPopt.initial_var_values):
-        if not var.fixed and not var.is_binary():
-            if old_value is not None:
-                if var.has_lb() and old_value < var.lb:
-                    old_value = var.lb
-                if var.has_ub() and old_value > var.ub:
-                    old_value = var.ub
-                # Set the value
-                var.set_value(old_value)
+    initialize_NLP(nlp_model)
 
     # Callback immediately before solving NLP subproblem
     config.subprob_presolve(nlp_model, solve_data)
@@ -96,6 +82,11 @@ def solve_NLP(nlp_model, solve_data, config):
             nlp_feasible = True
         else:
             nlp_feasible = False
+    elif subprob_terminate_cond is tc.internalSolverError:
+        # Possible that IPOPT had a restoration failture
+        config.logger.info(
+            "NLP solver had an internal failure: %s" % results.solver.message)
+        nlp_feasible = False
     else:
         raise ValueError(
             'GDPopt unable to handle NLP subproblem termination '
@@ -116,6 +107,37 @@ def solve_NLP(nlp_model, solve_data, config):
         # Dual values
         list(nlp_model.dual.get(c, None)
              for c in GDPopt.working_constraints_list))
+
+
+def detect_unfixed_discrete_vars(model):
+    """Detect unfixed discrete variables in use on the model."""
+    var_set = ComponentSet()
+    for constr in model.component_data_objects(
+            Constraint, active=True, descend_into=True):
+        var_set.update(
+            v for v in EXPR.identify_variables(
+                constr.body, include_fixed=False)
+            if v.is_binary())
+    return var_set
+
+
+def initialize_NLP(model):
+    """Perform initialization of the NLP.
+
+    Presently, this just restores the variable to the original model values.
+
+    """
+    # restore original variable values
+    for var, old_value in zip(model.GDPopt_utils.working_var_list,
+                              model.GDPopt_utils.initial_var_values):
+        if not var.fixed and not var.is_binary():
+            if old_value is not None:
+                if var.has_lb() and old_value < var.lb:
+                    old_value = var.lb
+                if var.has_ub() and old_value > var.ub:
+                    old_value = var.ub
+                # Set the value
+                var.set_value(old_value)
 
 
 def update_nlp_progress_indicators(solved_model, solve_data, config):
