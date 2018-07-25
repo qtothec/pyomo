@@ -1,17 +1,19 @@
 """Tests the induced linearity module."""
 import pyutilib.th as unittest
-from pyomo.contrib.preprocessing.plugins.induced_linearity import (_bilinear_expressions,
-                                                                   detect_effectively_discrete_vars,
-                                                                   determine_valid_values)
-from pyomo.core.kernel import ComponentSet
+from pyomo.contrib.preprocessing.plugins.induced_linearity import (
+    _bilinear_expressions,
+    detect_effectively_discrete_vars,
+    determine_valid_values)
+from pyomo.core.kernel.component_set import ComponentSet
 from pyomo.environ import (Binary, ConcreteModel, Constraint, ConstraintList,
-                           Integers, NonNegativeReals, Objective, RangeSet,
-                           SolverFactory, TransformationFactory, Var, exp,
-                           summation)
-from pyomo.repn import generate_standard_repn
+                           Integers, RangeSet, SolverFactory,
+                           TransformationFactory, Var, exp)
 from pyomo.gdp import Disjunct, Disjunction
+from pyomo.repn import generate_standard_repn
+from pyutilib.misc import Bunch
 
 glpk_available = SolverFactory('glpk').available()
+
 
 class TestInducedLinearity(unittest.TestCase):
     """Tests induced linearity."""
@@ -69,7 +71,9 @@ class TestInducedLinearity(unittest.TestCase):
         m.logical.add(expr=m.y[3] + m.y[4] == 1)
         m.logical.add(expr=m.y[2] + m.y[4] <= 1)
         var_to_values_map = determine_valid_values(
-            m, detect_effectively_discrete_vars(m, 1E-6))
+            m, detect_effectively_discrete_vars(m, 1E-6), Bunch(
+                equality_tolerance=1E-6,
+                pruning_solver='glpk'))
         valid_values = set([1, 2, 3, 4, 5])
         self.assertEqual(set(var_to_values_map[m.x]), valid_values)
 
