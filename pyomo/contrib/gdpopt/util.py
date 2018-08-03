@@ -78,6 +78,14 @@ def model_is_valid(solve_data, config):
                 solve_data.original_model, **config.mip_options)
             return False
 
+    # TODO if any continuous variables are multipled with binary ones, need
+    # to do some kind of transformation (Glover?) or throw an error message
+    return True
+
+
+def process_objective(solve_data, config):
+    m = solve_data.working_model
+    GDPopt = m.GDPopt_utils
     # Handle missing or multiple objectives
     objs = list(m.component_data_objects(
         ctype=Objective, active=True, descend_into=True))
@@ -111,10 +119,6 @@ def model_is_valid(solve_data, config):
     GDPopt.objective = Objective(
         expr=GDPopt.objective_value, sense=main_obj.sense)
 
-    # TODO if any continuous variables are multipled with binary ones, need
-    # to do some kind of transformation (Glover?) or throw an error message
-    return True
-
 
 def a_logger(str_or_logger):
     """Returns a logger when passed either a logger name or logger object."""
@@ -134,7 +138,7 @@ def copy_var_list_values(from_list, to_list, config, skip_stale=False):
             if skip_stale:
                 v_to.stale = False
         except ValueError as err:
-            if 'is not in domain Binary' in err.message:
+            if 'is not in domain Binary' in getattr(err, 'message', str(err)):
                 # Check to see if this is just a tolerance issue
                 v_from_val = value(v_from, exception=False)
                 if (fabs(v_from_val - 1) <= config.integer_tolerance or

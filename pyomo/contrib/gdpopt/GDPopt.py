@@ -38,7 +38,7 @@ from pyomo.contrib.gdpopt.util import (_DoNothing, a_logger,
                                        copy_var_list_values, model_is_valid,
                                        record_original_model_statistics,
                                        record_working_model_statistics,
-                                       reformulate_integer_variables)
+                                       reformulate_integer_variables, process_objective)
 from pyomo.core.base import Block, ConstraintList, value
 from pyomo.core.kernel.component_map import ComponentMap
 from pyomo.opt.base import IOptSolver
@@ -101,6 +101,10 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
         description="Nonlinear solver to use"))
     nlp_solver_args = CONFIG.declare(
         "nlp_solver_args", ConfigBlock(implicit=True))
+    CONFIG.declare("call_before_master_solve", ConfigValue(
+        default=_DoNothing,
+        description="callback hook before calling the master problem solver"
+    ))
     CONFIG.declare("call_after_master_solve", ConfigValue(
         default=_DoNothing,
         description="callback hook after a solution of the master problem"
@@ -228,6 +232,7 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
 
             # Reformulate integer variables to binary
             reformulate_integer_variables(solve_data.working_model, config)
+            process_objective(solve_data, config)
 
             # Save ordered lists of main modeling components, so that data can
             # be easily transferred between future model clones.
