@@ -84,6 +84,13 @@ def add_outer_approximation_cuts(nlp_result, solve_data, config):
         config.logger.info('Added %s OA cuts' % counter)
 
 
+def add_affine_cuts(nlp_result, solve_data, config):
+    """Adds rigorous affine cuts."""
+    pass
+    # Add constraints corresponding to the affine cuts at the solution point
+    # given by the nlp_result
+
+
 def add_integer_cut(var_values, solve_data, config, feasible=False):
     """Add an integer cut to the linear GDP model."""
     m = solve_data.linear_GDP
