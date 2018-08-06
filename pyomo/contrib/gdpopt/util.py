@@ -447,8 +447,9 @@ class time_code(ContextDecorator):
         self._start_time = timeit.default_timer()
 
     def __exit__(self, *exc_details):
-        end_time = timeit.default_timer()
-        self._time_obj[self._block_name] += end_time - self._start_time
+        elapsed_time = self._start_time - timeit.default_timer()
+        prev_time = self._time_obj.get(self._block_name, 0)
+        self._time_obj[self._block_name] = prev_time + elapsed_time
 
 
 @contextmanager

@@ -208,7 +208,6 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
         solve_data = GDPoptSolveData()
         solve_data.results = SolverResults()
         solve_data.timing = Container()
-        solve_data.timing.total = 0
 
         old_logger_level = config.logger.getEffectiveLevel()
         with time_code(solve_data.timing, 'total'), \
