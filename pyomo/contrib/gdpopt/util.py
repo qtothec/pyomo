@@ -10,9 +10,11 @@ from pyomo.core.expr import current as EXPR
 from pyomo.core.kernel.component_set import ComponentSet
 from pyomo.gdp import Disjunct, Disjunction
 from pyomo.opt import SolverFactory
-from pyomo.opt.results import ProblemSense, SolverResults
+from pyomo.opt.results import ProblemSense
 from six import StringIO
 from pyomo.common.log import LoggingIntercept
+import timeit
+from contextlib import ContextDecorator, contextmanager
 
 
 class _DoNothing(object):
@@ -68,14 +70,14 @@ def model_is_valid(solve_data, config):
                 "Your model is an NLP (nonlinear program). "
                 "Using NLP solver %s to solve." % config.nlp_solver)
             SolverFactory(config.nlp_solver).solve(
-                solve_data.original_model, **config.nlp_options)
+                solve_data.original_model, **config.nlp_solver_args)
             return False
         else:
             config.logger.info(
                 "Your model is an LP (linear program). "
                 "Using LP solver %s to solve." % config.mip_solver)
             SolverFactory(config.mip_solver).solve(
-                solve_data.original_model, **config.mip_options)
+                solve_data.original_model, **config.mip_solver_args)
             return False
 
     # TODO if any continuous variables are multipled with binary ones, need
@@ -265,9 +267,9 @@ def build_ordered_component_lists(model, prefix='working'):
 
 
 def record_original_model_statistics(solve_data, config):
-    """Record problem statistics for original model and setup SolverResults."""
+    """Record problem statistics for original model."""
     # Create the solver results object
-    res = solve_data.results = SolverResults()
+    res = solve_data.results
     prob = res.problem
     origGDPopt = solve_data.original_model.GDPopt_utils
     res.problem.name = solve_data.working_model.name
@@ -434,3 +436,42 @@ def copy_and_fix_mip_values_to_nlp(var_list, val_list, config):
                 var.fix(int(round(val)))
             else:
                 var.fix(val)
+
+
+class time_code(ContextDecorator):
+    def __init__(self, timing_data_obj, code_block_name):
+        self._time_obj = timing_data_obj
+        self._block_name = code_block_name
+
+    def __enter__(self):
+        self._start_time = timeit.default_timer()
+
+    def __exit__(self, *exc_details):
+        end_time = timeit.default_timer()
+        self._time_obj[self._block_name] += end_time - self._start_time
+
+
+@contextmanager
+def restore_logger_level(logger):
+    old_logger_level = logger.getEffectiveLevel()
+    yield
+    logger.setLevel(old_logger_level)
+
+
+@contextmanager
+def create_utility_block(model, name):
+    created_util_block = False
+    # Create a model block on which to store GDPopt-specific utility
+    # modeling objects.
+    if hasattr(model, name):
+        raise RuntimeError(
+            "GDPopt needs to create a Block named %s "
+            "on the model object, but an attribute with that name "
+            "already exists." % name)
+    else:
+        created_util_block = True
+        model.GDPopt_utils = Block(
+            doc="Container for GDPopt solver utility modeling objects")
+    yield
+    if created_util_block:
+        model.del_component(name)
