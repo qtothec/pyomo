@@ -44,9 +44,7 @@ def GDPopt_iteration_loop(solve_data, config):
                 nlp_result = solve_LOA_subproblem(
                     mip_result.var_values, solve_data, config)
             if nlp_result.feasible:
-                with time_code(solve_data.timing, 'OA cut generation'):
-                    add_outer_approximation_cuts(
-                        nlp_result, solve_data, config)
+                add_outer_approximation_cuts(nlp_result, solve_data, config)
         elif solve_data.current_strategy == 'GLOA':
             with time_code(solve_data.timing, 'nlp'):
                 nlp_result = solve_global_NLP(
