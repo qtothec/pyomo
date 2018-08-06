@@ -282,10 +282,12 @@ class GDPoptSolver(pyomo.common.plugin.Plugin):
             solve_data.feasible_solution_improved = False
 
             # Initialize the master problem
-            GDPopt_initialize_master(solve_data, config)
+            with time_code(solve_data.timing, 'initialization'):
+                GDPopt_initialize_master(solve_data, config)
 
             # Algorithm main loop
-            GDPopt_iteration_loop(solve_data, config)
+            with time_code(solve_data.timing, 'main loop'):
+                GDPopt_iteration_loop(solve_data, config)
 
             # Update values in working model
             copy_var_list_values(
