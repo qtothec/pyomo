@@ -138,14 +138,19 @@ def copy_var_list_values(from_list, to_list, config, skip_stale=False):
             if skip_stale:
                 v_to.stale = False
         except ValueError as err:
-            if 'is not in domain Binary' in getattr(err, 'message', str(err)):
-                # Check to see if this is just a tolerance issue
-                v_from_val = value(v_from, exception=False)
-                if (fabs(v_from_val - 1) <= config.integer_tolerance or
-                        fabs(v_from_val) <= config.integer_tolerance):
-                    v_to.set_value(round(v_from_val))
-                else:
-                    raise
+            err_msg = getattr(err, 'message', str(err))
+            var_val = value(v_from)
+            rounded_val = round(var_val)
+            # Check to see if this is just a tolerance issue
+            if 'is not in domain Binary' in err_msg and (
+                    fabs(var_val - 1) <= config.integer_tolerance or
+                    fabs(var_val) <= config.integer_tolerance):
+                v_to.set_value(rounded_val)
+            elif 'is not in domain Integers' in err_msg and (
+                    fabs(var_val - rounded_val) <= config.integer_tolerance):
+                v_to.set_value(rounded_val)
+            else:
+                raise
 
 
 def is_feasible(model, config):
@@ -231,9 +236,13 @@ def build_ordered_component_lists(model, prefix='working'):
                 ctype=Disjunction, active=True,
                 descend_into=(Disjunct, Block))))
 
-    # Identify the non-fixed variables in (potentially) active constraints
+    # Identify the non-fixed variables in (potentially) active constraints and
+    # objective functions
     for constr in getattr(GDPopt, '%s_constraints_list' % prefix):
         for v in EXPR.identify_variables(constr.body, include_fixed=False):
+            var_set.add(v)
+    for obj in model.component_data_objects(ctype=Objective, active=True):
+        for v in EXPR.identify_variables(obj.expr, include_fixed=False):
             var_set.add(v)
     # Disjunct indicator variables might not appear in active constraints. In
     # fact, if we consider them Logical variables, they should not appear in
