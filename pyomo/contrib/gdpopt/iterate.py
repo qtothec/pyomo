@@ -6,6 +6,7 @@ from pyomo.contrib.gdpopt.cut_generation import (add_integer_cut,
 from pyomo.contrib.gdpopt.mip_solve import solve_GLOA_master, solve_LOA_master
 from pyomo.contrib.gdpopt.nlp_solve import (solve_global_NLP,
                                             solve_LOA_subproblem)
+from pyomo.opt import TerminationCondition as tc
 
 
 def GDPopt_iteration_loop(solve_data, config):
@@ -69,6 +70,7 @@ def algorithm_should_terminate(solve_data, config):
             'LB: %s + (tol %s) >= UB: %s' %
             (solve_data.LB, config.bound_tolerance,
              solve_data.UB))
+        solve_data.results.solver.termination_condition = tc.optimal
         return True
 
     # Check iteration limit
@@ -80,12 +82,14 @@ def algorithm_should_terminate(solve_data, config):
         config.logger.info(
             'Final bound values: LB: %s  UB: %s'
             % (solve_data.LB, solve_data.UB))
+        solve_data.results.solver.termination_condition = tc.maxIterations
         return True
 
     if not algorithm_is_making_progress(solve_data, config):
         config.logger.debug(
             'Algorithm is not making enough progress. '
             'Exiting iteration loop.')
+        solve_data.results.solver.termination_condition = tc.locallyOptimal
         return True
     return False
 
