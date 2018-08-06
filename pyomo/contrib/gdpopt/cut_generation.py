@@ -29,6 +29,8 @@ def add_outer_approximation_cuts(nlp_result, solve_data, config):
 
         nonlinear_constraints = ComponentSet(GDPopt.working_nonlinear_constraints)
         counter = 0
+        if not hasattr(GDPopt, 'jacobians'):
+            GDPopt.jacobians = ComponentMap()
         for constr, dual_value in zip(GDPopt.working_constraints_list,
                                       nlp_result.dual_values):
             if dual_value is None or constr not in nonlinear_constraints:
@@ -52,9 +54,12 @@ def add_outer_approximation_cuts(nlp_result, solve_data, config):
 
             # TODO make this more efficient by not having to use
             # differentiate() at each iteration.
-            constr_vars = list(EXPR.identify_variables(constr.body))
-            jac_list = differentiate(constr.body, wrt_list=constr_vars)
-            jacobians = ComponentMap(zip(constr_vars, jac_list))
+            jacobians = GDPopt.jacobians.get(constr, None)
+            if jacobians is None:
+                constr_vars = list(EXPR.identify_variables(constr.body))
+                jac_list = differentiate(constr.body, wrt_list=constr_vars)
+                jacobians = ComponentMap(zip(constr_vars, jac_list))
+                GDPopt.jacobians[constr] = jacobians
 
             # Create a block on which to put outer approximation cuts.
             oa_utils = parent_block.component('GDPopt_OA')
@@ -73,7 +78,7 @@ def add_outer_approximation_cuts(nlp_result, solve_data, config):
                 expr=copysign(1, sign_adjust * dual_value) * (
                     value(constr.body) + sum(
                         value(jacobians[var]) * (var - value(var))
-                        for var in constr_vars)) + slack_var <= 0)
+                        for var in jacobians)) + slack_var <= 0)
             counter += 1
 
         config.logger.info('Added %s OA cuts' % counter)
