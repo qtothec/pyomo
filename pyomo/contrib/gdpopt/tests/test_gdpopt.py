@@ -59,7 +59,7 @@ class TestGDPopt(unittest.TestCase):
 
         self.assertTrue(fabs(value(eight_process.profit.expr) - 68) <= 1E-2)
 
-    @unittest.skipIf(not SolverFactory('baron').available())
+    @unittest.skipIf(not SolverFactory('baron').available(), "Baron not available.")
     def test_GLOA_8PP(self):
         """Test the global logic-based outer approximation algorithm."""
         exfile = import_file(
