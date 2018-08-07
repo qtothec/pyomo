@@ -59,6 +59,19 @@ class TestGDPopt(unittest.TestCase):
 
         self.assertTrue(fabs(value(eight_process.profit.expr) - 68) <= 1E-2)
 
+    @unittest.skipIf(not SolverFactory('baron').available(), "Baron not available.")
+    def test_GLOA_8PP(self):
+        """Test the global logic-based outer approximation algorithm."""
+        exfile = import_file(
+            join(exdir, 'eight_process', 'eight_proc_model.py'))
+        eight_process = exfile.build_eight_process_flowsheet()
+        SolverFactory('gdpopt').solve(
+            eight_process, strategy='GLOA',
+            mip_solver=required_solvers[1],
+            nlp_solver='baron')
+
+        self.assertTrue(fabs(value(eight_process.profit.expr) - 68) <= 1E-2)
+
     def test_LOA_strip_pack_default_init(self):
         """Test logic-based outer approximation with strip packing."""
         exfile = import_file(
