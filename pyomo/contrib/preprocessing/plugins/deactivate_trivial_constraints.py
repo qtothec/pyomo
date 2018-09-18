@@ -43,7 +43,7 @@ class TrivialConstraintDeactivator(IsomorphicTransformation):
         "constraints are appended (side effect)"
     ))
     CONFIG.declare("tolerance", ConfigValue(
-        default=1E-13, domain=NonNegativeFloat,
+        default=1E-10, domain=NonNegativeFloat,
         description="tolerance on constraint violations"
     ))
 

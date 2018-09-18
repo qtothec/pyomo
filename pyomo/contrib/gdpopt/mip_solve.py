@@ -38,7 +38,8 @@ def solve_linear_GDP(linear_GDP_model, solve_data, config):
         # Remove terms in equal to zero summations
         'contrib.propagate_zero_sum',
         # Remove trivial constraints
-        'contrib.deactivate_trivial_constraints']
+        'contrib.deactivate_trivial_constraints',
+        ]
     for xfrm in preprocessing_transformations:
         TransformationFactory(xfrm).apply_to(m)
 
@@ -114,6 +115,7 @@ def distinguish_mip_infeasible_or_unbounded(m, config):
     """
     tmp_args = deepcopy(config.mip_solver_args)
     # TODO This solver option is specific to Gurobi.
+    tmp_args['options'] = tmp_args.get('options', {})
     tmp_args['options']['DualReductions'] = 0
     with SuppressInfeasibleWarning():
         results = SolverFactory(config.mip_solver).solve(m, **tmp_args)
