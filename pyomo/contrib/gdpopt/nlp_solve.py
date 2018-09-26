@@ -91,6 +91,18 @@ def solve_NLP(nlp_model, solve_data, config):
         config.logger.info(
             "NLP solver had an internal failure: %s" % results.solver.message)
         nlp_result.feasible = False
+    elif (subprob_terminate_cond is tc.other and
+          "Too few degrees of freedom" in str(results.solver.message)):
+        # Possible IPOPT degrees of freedom error
+        config.logger.info(
+            "IPOPT has too few degrees of freedom: %s" %
+            results.solver.message)
+        nlp_result.feasible = False
+    elif (subprob_terminate_cond is tc.other):
+        config.logger.info(
+            "NLP solver had a termination condition of 'other': %s" %
+            results.solver.message)
+        nlp_result.feasible = False
     else:
         raise ValueError(
             'GDPopt unable to handle NLP subproblem termination '
