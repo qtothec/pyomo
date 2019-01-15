@@ -3,25 +3,128 @@ import random
 
 import pyutilib.th as unittest
 
-from pyomo.core import ConcreteModel, RangeSet, Var, Integers, Binary, Objective
+from pyomo.environ import ConcreteModel, RangeSet, Var, Integers, Binary, Objective, SolverFactory, \
+    TransformationFactory
+from pyomo.environ import TerminationCondition as tc
 from pyomo.core.expr.current import exp, log
+from pyomo.gdp import Disjunct
 
 
 class TestProblemGenerator(unittest.TestCase):
-    def test_build_model(self):
-        m = generate_block()
-        build_model(m)
-        m.pprint()
+    def test_generate_feasible_block(self):
+        m = generate_feasible_block(ConcreteModel())
+        build_block(m)
+
+    def test_generate_model(self):
+        m = generate_GDP_model()
+        # SolverFactory('gdpopt').solve(m, mip_solver='gams', nlp_solver='gams')
+        TransformationFactory('gdp.bigm').apply_to(m, bigM=500)
+        SolverFactory('gams').solve(m, solver='baron', tee=True)
 
 
-def generate_model():
+def generate_feasible_block(blk):
+    max_iter = 25
+    for retries in range(1, max_iter + 1):
+        try:
+            m = generate_block(ConcreteModel())
+            build_block(m)
+            m.objective = Objective(expr=m.x[1])
+            # TODO suppress the warnings that I get from this.
+            res = SolverFactory('gams').solve(m)
+            res_tc = res.solver.termination_condition
+            if res_tc in (tc.optimal, tc.feasible, tc.locallyOptimal):
+                blk.var_data = m.var_data
+                blk.bilinear_list = m.bilinear_list
+                blk.exponential_list = m.exponential_list
+                blk.log_list = m.log_list
+                blk.poly_list = m.poly_list
+                blk.frac_list = m.frac_list
+                blk.linear_list = m.linear_list
+                return blk
+            else:
+                # TODO use logger rather than print
+                print("Termination condition of %s" % res_tc)
+        except ValueError as e:
+            # TODO use logger rather than print
+            print("Feasible block generation attempt %s failed." % retries)
+    raise RuntimeError("Unable to generatee feasible block in %s iterations." % max_iter)
+
+
+def build_block(blk):
+    n_vars, n_binary, n_integer = blk.var_data
+    blk.vars = RangeSet(n_vars)
+    blk.x = Var(blk.vars, bounds=(-100, 100), initialize=1)
+    blk.binary_vars = RangeSet(n_binary)
+    blk.integer_vars = RangeSet(n_integer)
+    blk.y = Var(blk.binary_vars, domain=Binary)
+    blk.z = Var(blk.integer_vars, domain=Integers)
+
+    blk.bilinear = RangeSet(len(blk.bilinear_list))
+    blk.exponential = RangeSet(len(blk.exponential_list))
+    blk.logarithm = RangeSet(len(blk.log_list))
+    blk.polynomial = RangeSet(len(blk.poly_list))
+    blk.fractional = RangeSet(len(blk.frac_list))
+    blk.linear = RangeSet(len(blk.linear_list))
+
+    @blk.Constraint(blk.bilinear)
+    def c_bilinear(blk, idx):
+        A, i, j, k = blk.bilinear_list[idx - 1]
+        return blk.x[i] <= A * blk.x[j] * blk.x[k]
+
+    @blk.Constraint(blk.exponential)
+    def c_exponential(blk, idx):
+        A, B, i, j = blk.exponential_list[idx - 1]
+        return blk.x[i] <= A * exp(B * blk.x[j])
+
+    @blk.Constraint(blk.logarithm)
+    def c_logarithm(blk, idx):
+        A, B, i, j = blk.log_list[idx - 1]
+        return blk.x[i] <= A * log(B * blk.x[j])
+
+    @blk.Constraint(blk.polynomial)
+    def c_polynomial(blk, idx):
+        i, j = blk.poly_list[idx - 1][-2:]
+        Ks = blk.poly_list[idx - 1][:-2]
+        max_power = len(Ks) - 1
+        return blk.x[i] <= sum(
+            K * pow(10, max_power - p) * pow(blk.x[j], max_power - p)
+            for p, K in enumerate(Ks))
+
+    @blk.Constraint(blk.fractional)
+    def c_fractional(blk, idx):
+        A, B, i, j = blk.frac_list[idx - 1]
+        return blk.x[i] <= A / (blk.x[j] + B)
+
+    @blk.Constraint(blk.linear)
+    def c_linear(blk, idx):
+        A, B, i, j = blk.linear_list[idx - 1]
+        return blk.x[i] <= A * blk.x[j] + B
+
+
+def generate_GDP_model():
     n_disjunctions = 2
     disjuncts_per_disjunction = 2
+    m = ConcreteModel()
+    m.disjunctions = RangeSet(n_disjunctions)
+    m.disjuncts = RangeSet(disjuncts_per_disjunction)
+    m.disj = Disjunct(m.disjunctions, m.disjuncts)
+    for idx in m.disjunctions * m.disjuncts:
+        generate_feasible_block(m.disj[idx])
+        build_block(m.disj[idx])
+
+    # TODO improve naming convention
+    @m.Disjunction(m.disjunctions)
+    def c_disjunction(m, disjctn):
+        return [m.disj[disjctn, disj] for disj in m.disjuncts]
+
+    m.objective = Objective(expr=sum(m.disj[idx].x[1] for idx in m.disjunctions * m.disjuncts))
+    return m
 
 
-def generate_block():
+def generate_block(blk):
     # Variables
     n_vars = 10
+    # TODO add support for binary and integer variables
     n_binary = 0
     n_integer = 0
 
@@ -34,14 +137,7 @@ def generate_block():
     n_fractional = 1
 
     # Create model
-    m = ConcreteModel()
-    m.vars = RangeSet(n_vars)
-    m.x = Var(m.vars, bounds=(-100, 100))
-    m.binary_vars = RangeSet(n_binary)
-    m.integer_vars = RangeSet(n_integer)
-    m.y = Var(m.binary_vars, domain=Binary)
-    m.z = Var(m.integer_vars, domain=Integers)
-    m.objective = Objective(expr=m.x[1])
+    blk.var_data = (n_vars, n_binary, n_integer)
 
     """Bilinear constraints, of form:
     x[i] <= A x[j] x[k]
@@ -49,8 +145,7 @@ def generate_block():
     
     m.bilinear_list = list(idx -> [A, i, j, k] for idx in m.bilinear)
     """
-    m.bilinear = RangeSet(n_bilinear)
-    m.bilinear_list = _get_param_list(m, len(m.bilinear), 1, 3)
+    blk.bilinear_list = _get_param_list(n_vars, n_bilinear, 1, 3)
 
     """Exponential constraints, of form:
     x[i] <= A * exp(B * x[j])
@@ -58,8 +153,7 @@ def generate_block():
     
     m.exponential_list = list(idx -> [A, B, i, j] for idx in m.exponential)
     """
-    m.exponential = RangeSet(n_exponential)
-    m.exponential_list = _get_param_list(m, len(m.exponential), 2, 2)
+    blk.exponential_list = _get_param_list(n_vars, n_exponential, 2, 2)
 
     """Log function constraints, of form:
     x[i] <= A * log(B * x[j])
@@ -67,8 +161,7 @@ def generate_block():
     
     m.log_list = list(idx -> [A, B, i, j] for idx in m.logarithm)
     """
-    m.logarithm = RangeSet(n_log)
-    m.log_list = _get_param_list(m, len(m.logarithm), 2, 2)
+    blk.log_list = _get_param_list(n_vars, n_log, 2, 2)
 
     """Polynomial constraints, of form:
     x[i] <= K0 * 10^-P * x[j]^P + K1 * 10^-(P-1) * x[j]^(P-1) + ... + K(P+1)
@@ -77,8 +170,7 @@ def generate_block():
     
     m.poly_list = list(idx -> [K0, K1, ..., K(P+1), i, j] for idx in m.polynomial)
     """
-    m.polynomial = RangeSet(n_polynomial)
-    m.poly_list = _get_param_list(m, len(m.polynomial), poly_power + 1, 2)
+    blk.poly_list = _get_param_list(n_vars, n_polynomial, poly_power + 1, 2)
 
     """Fractional constraints, of form:
     x[i] = A / (x[j] + B)
@@ -86,22 +178,21 @@ def generate_block():
     
     m.frac_list = list(idx -> [A, B, i, j] for idx in m.fractional)
     """
-    m.fractional = RangeSet(n_fractional)
-    m.frac_list = _get_param_list(m, len(m.fractional), 2, 2)
+    blk.frac_list = _get_param_list(n_vars, n_fractional, 2, 2)
 
     """Linear constraints, of form:
     x[i] <= A * x[j] + B"""
     # generate linear constraints so that everything is connected up to each other
-    m.used_var_idxs = set(
-        [tup[-3:] for tup in m.bilinear_list] +
-        [tup[-2:] for tup in m.exponential_list] +
-        [tup[-2:] for tup in m.log_list] +
-        [tup[-2:] for tup in m.poly_list] +
-        [tup[-2:] for tup in m.frac_list]
+    blk.used_var_idxs = set(
+        [tup[-3:] for tup in blk.bilinear_list] +
+        [tup[-2:] for tup in blk.exponential_list] +
+        [tup[-2:] for tup in blk.log_list] +
+        [tup[-2:] for tup in blk.poly_list] +
+        [tup[-2:] for tup in blk.frac_list]
     )
-    m.unused_vars = set(m.vars - m.used_var_idxs)
-    vars_to_use = random.sample(m.unused_vars, len(m.unused_vars))
-    m.linear_list = []
+    blk.unused_vars = set(range(1, n_vars + 1)) - blk.used_var_idxs
+    vars_to_use = random.sample(blk.unused_vars, len(blk.unused_vars))
+    blk.linear_list = []
     while len(vars_to_use) > 0:
         i, j = 0, 0
         num_vars_left = len(vars_to_use)
@@ -110,67 +201,22 @@ def generate_block():
             vars_to_use = vars_to_use[2:]
         elif num_vars_left == 1:
             i = vars_to_use[0]
-            j = random.sample(m.used_var_idxs, 1)
+            j = random.sample(blk.used_var_idxs, 1)
             vars_to_use = []
-        m.linear_list.append((
+        blk.linear_list.append((
             random.uniform(-10, 10), random.uniform(-10, 10), i, j))
-    m.linear = RangeSet(len(m.linear_list))
 
-    return m
-
-
-def build_model(m):
-    @m.Constraint(m.bilinear)
-    def c_bilinear(m, idx):
-        A, i, j, k = m.bilinear_list[idx - 1]
-        return m.x[i] <= A * m.x[j] * m.x[k]
-
-    @m.Constraint(m.exponential)
-    def c_exponential(m, idx):
-        A, B, i, j = m.exponential_list[idx - 1]
-        return m.x[i] <= A * exp(B * m.x[j])
-
-    @m.Constraint(m.logarithm)
-    def c_logarithm(m, idx):
-        A, B, i, j = m.log_list[idx - 1]
-        return m.x[i] <= A * log(B * m.x[j])
-
-    @m.Constraint(m.polynomial)
-    def c_polynomial(m, idx):
-        i, j = m.poly_list[idx - 1][-2:]
-        Ks = m.poly_list[idx - 1][:-2]
-        max_power = len(Ks) - 1
-        return m.x[i] <= sum(
-            K * pow(10, max_power - p) * pow(m.x[j], max_power - p)
-            for p, K in enumerate(Ks))
-
-    @m.Constraint(m.fractional)
-    def c_fractional(m, idx):
-        A, B, i, j = m.frac_list[idx - 1]
-        return m.x[i] <= A / (m.x[j] + B)
-
-    @m.Constraint(m.linear)
-    def c_linear(m, idx):
-        A, B, i, j = m.linear_list[idx - 1]
-        return m.x[i] <= A * m.x[j] + B
+    return blk
 
 
-def _get_param_list(m, n, n_rnd, n_vars):
+def _get_param_list(tot_vars, n, n_rnd, n_vars):
     return list(
-        tuple(random.uniform(-10, 10) for _ in range(n_rnd)) + tuple(_get_n_var_idx(m, n_vars))
+        tuple(random.uniform(-10, 10) for _ in range(n_rnd)) + tuple(_get_n_var_idx(tot_vars, n_vars))
         for _ in range(n))
 
-def _get_n_var_idx(m, n):
-    return random.sample(range(1, len(m.vars) + 1), n)
 
-
-"""Nonlinear inequalities
-One term, two term
-Bilinear
-Exponential
-Log function
-Polynomial (varying order)
-Fractional terms"""
+def _get_n_var_idx(tot_vars, n):
+    return random.sample(range(1, tot_vars + 1), n)
 
 
 if __name__ == "__main__":
