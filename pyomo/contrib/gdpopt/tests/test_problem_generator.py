@@ -108,16 +108,24 @@ def generate_GDP_model():
     m.disjunctions = RangeSet(n_disjunctions)
     m.disjuncts = RangeSet(disjuncts_per_disjunction)
     m.disj = Disjunct(m.disjunctions, m.disjuncts)
-    for idx in m.disjunctions * m.disjuncts:
-        generate_feasible_block(m.disj[idx])
-        build_block(m.disj[idx])
+    for disj in m.disj[...]:
+        generate_feasible_block(disj)
+        build_block(disj)
 
     # TODO improve naming convention
     @m.Disjunction(m.disjunctions)
     def c_disjunction(m, disjctn):
         return [m.disj[disjctn, disj] for disj in m.disjuncts]
 
-    m.objective = Objective(expr=sum(m.disj[idx].x[1] for idx in m.disjunctions * m.disjuncts))
+    m.objective = Objective(expr=sum(m.disj[:, :].x[1]))
+
+    m.data = {
+        'n_disjunctions': n_disjunctions,
+        'n_disjuncts': disjuncts_per_disjunction,
+        'disjunctions': [
+            [disj.data for disj in m.disj[disjctn, :]] for disjctn in m.disjunctions
+        ]
+    }
     return m
 
 
