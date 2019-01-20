@@ -1,4 +1,6 @@
 """GDP problem generator"""
+import json
+import os
 import random
 
 import pyutilib.th as unittest
@@ -15,6 +17,19 @@ class TestProblemGenerator(unittest.TestCase):
         m = build_GDP_model(generate_GDP_model_data())
         TransformationFactory('gdp.bigm').apply_to(m, bigM=500)
         SolverFactory('gams').solve(m, solver='baron', tee=True)
+
+    def test_read_write_model(self):
+        blk_data = generate_GDP_model_data()
+        with open("test.json", 'w') as output_file:
+            json.dump(blk_data, output_file)
+        with open("test.json") as input_file:
+            recover = json.load(input_file)
+        recovered_blk_data = Container()
+        recovered_blk_data.update(recover)
+        m = build_GDP_model(recovered_blk_data)
+        TransformationFactory('gdp.bigm').apply_to(m, bigM=500)
+        SolverFactory('gams').solve(m, solver='baron', tee=True)
+        os.remove("test.json")
 
 
 def next_feasible_block_data():
@@ -71,7 +86,7 @@ class ModelBlockData(Container):
 
 
 def generate_GDP_model_data():
-    n_disjunctions = 10
+    n_disjunctions = 2
     max_disjuncts_per_disjunction = 4
 
     blk_data = next_feasible_block_data()
