@@ -7,7 +7,7 @@ from pyomo.contrib.mindtpy.cut_generation import (add_ecp_cut, add_gbd_cut,
                                                   add_objective_linearization,
                                                   add_psc_cut)
 from pyomo.contrib.mindtpy.nlp_solve import solve_NLP_subproblem
-from pyomo.contrib.mindtpy.util import (calc_jacobians, copy_values,
+from pyomo.contrib.mindtpy.util import (calc_jacobians,
                                         detect_nonlinear_vars)
 from pyomo.core import (ConstraintList, Objective, Suffix,
                         TransformationFactory, maximize, minimize, value)
@@ -29,17 +29,17 @@ def MindtPy_initialize_master(solve_data, config):
         calc_jacobians(solve_data, config)  # preload jacobians
         MindtPy.MindtPy_linear_cuts.oa_cuts = ConstraintList(
             doc='Outer approximation cuts')
-    elif config.strategy == 'ECP':
-        calc_jacobians(solve_data, config)  # preload jacobians
-        MindtPy.MindtPy_linear_cuts.ecp_cuts = ConstraintList(
-            doc='Extended Cutting Planes')
-    elif config.strategy == 'PSC':
-        detect_nonlinear_vars(solve_data, config)
-        MindtPy.MindtPy_linear_cuts.psc_cuts = ConstraintList(
-            doc='Partial surrogate cuts')
-    elif config.strategy == 'GBD':
-        MindtPy.MindtPy_linear_cuts.gbd_cuts = ConstraintList(
-            doc='Generalized Benders cuts')
+    # elif config.strategy == 'ECP':
+    #     calc_jacobians(solve_data, config)  # preload jacobians
+    #     MindtPy.MindtPy_linear_cuts.ecp_cuts = ConstraintList(
+    #         doc='Extended Cutting Planes')
+    # elif config.strategy == 'PSC':
+    #     detect_nonlinear_vars(solve_data, config)
+    #     MindtPy.MindtPy_linear_cuts.psc_cuts = ConstraintList(
+    #         doc='Partial surrogate cuts')
+    # elif config.strategy == 'GBD':
+    #     MindtPy.MindtPy_linear_cuts.gbd_cuts = ConstraintList(
+    #         doc='Generalized Benders cuts')
 
     # Set default initialization_strategy
     if config.init_strategy is None:
@@ -71,16 +71,17 @@ def init_rNLP(solve_data, config):
             m, **config.nlp_solver_args)
     subprob_terminate_cond = results.solver.termination_condition
     if subprob_terminate_cond is tc.optimal:
-        nlp_solution_values = list(v.value for v in MindtPy.var_list)
-        dual_values = list(m.dual[c] for c in MindtPy.constraints)
+        main_objective = next(m.component_data_objects(Objective, active=True))
+        nlp_solution_values = list(v.value for v in MindtPy.variable_list)
+        dual_values = list(m.dual[c] for c in MindtPy.constraint_list)
         # Add OA cut
-        if MindtPy.objective.sense == minimize:
-            solve_data.LB = value(MindtPy.objective.expr)
+        if main_objective.sense == minimize:
+            solve_data.LB = value(main_objective.expr)
         else:
-            solve_data.UB = value(MindtPy.objective.expr)
+            solve_data.UB = value(main_objective.expr)
         config.logger.info(
             'NLP %s: OBJ: %s  LB: %s  UB: %s'
-            % (solve_data.nlp_iter, value(MindtPy.objective.expr),
+            % (solve_data.nlp_iter, value(main_objective.expr),
                solve_data.LB, solve_data.UB))
         if config.strategy == 'OA':
             add_oa_cut(nlp_solution_values, dual_values, solve_data, config)
@@ -116,7 +117,7 @@ def init_max_binaries(solve_data, config):
     config.logger.info(
         "MILP %s: maximize value of binaries" %
         (solve_data.mip_iter))
-    for c in MindtPy.nonlinear_constraints:
+    for c in MindtPy.working_nonlinear_constraints:
         c.deactivate()
     MindtPy.obj.deactivate()
     MindtPy.MindtPy_max_binary_obj = Objective(
@@ -133,7 +134,7 @@ def init_max_binaries(solve_data, config):
     MindtPy.MindtPy_max_binary_obj.deactivate()
 
     MindtPy.obj.activate()
-    for c in MindtPy.nonlinear_constraints:
+    for c in MindtPy.working_nonlinear_constraints:
         c.activate()
     solve_terminate_cond = results.solver.termination_condition
     if solve_terminate_cond is tc.optimal:

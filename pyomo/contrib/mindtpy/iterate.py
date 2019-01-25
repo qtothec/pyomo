@@ -2,15 +2,14 @@
 from __future__ import division
 
 from pyomo.contrib.mindtpy.cut_generation import add_ecp_cut
-from pyomo.contrib.mindtpy.mip_solve import (solve_ECP_master,
-                                             solve_GBD_master, solve_OA_master,
-                                             solve_PSC_master)
+from pyomo.contrib.mindtpy.mip_solve import (solve_OA_master)
 from pyomo.contrib.mindtpy.nlp_solve import solve_NLP_subproblem
-from pyomo.core import minimize
+from pyomo.core import minimize, Objective
 
 
 def MindtPy_iteration_loop(solve_data, config):
     m = solve_data.working_model
+    main_objective = next(m.component_data_objects(Objective, active=True))
     MindtPy = m.MindtPy_utils
     while solve_data.mip_iter < config.iteration_limit:
         config.logger.info(
@@ -24,26 +23,18 @@ def MindtPy_iteration_loop(solve_data, config):
         # solve MILP master problem
         if config.strategy == 'OA':
             solve_OA_master(solve_data, config)
-        elif config.strategy == 'PSC':
-            solve_PSC_master(solve_data, config)
-        elif config.strategy == 'GBD':
-            solve_GBD_master(solve_data, config)
-        elif config.strategy == 'ECP':
-            solve_ECP_master(solve_data, config)
+        else:
+            raise NotImplementedError()
 
         if algorithm_should_terminate(solve_data, config):
             break
 
-        if config.strategy == 'ECP':
-            # Add ECP cut
-            add_ecp_cut(solve_data, config)
-        else:
-            # Solve NLP subproblem
-            solve_NLP_subproblem(solve_data, config)
+        # Solve NLP subproblem
+        solve_NLP_subproblem(solve_data, config)
 
         # If the hybrid algorithm is not making progress, switch to OA.
         progress_required = 1E-6
-        if MindtPy.objective.sense == minimize:
+        if main_objective.sense == minimize:
             log = solve_data.LB_progress
             sign_adjust = 1
         else:
@@ -69,8 +60,9 @@ def MindtPy_iteration_loop(solve_data, config):
         if not making_progress and (
                 config.strategy == 'hPSC' and
                 config.strategy == 'PSC'):
-            print('Not making enough progress for {} iterations. '
-                  'Switching to OA.'.format(max_nonimprove_iter))
+            config.logger.info(
+                'Not making enough progress for {} iterations. '
+                'Switching to OA.'.format(max_nonimprove_iter))
             config.strategy = 'OA'
 
 
