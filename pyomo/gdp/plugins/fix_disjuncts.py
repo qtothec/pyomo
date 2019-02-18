@@ -107,6 +107,9 @@ class GDP_Disjunct_Fixer(Transformation):
             else:
                 self._transformObject(t)
 
+        if config.targets is None:
+            TransformationFactory('gdp.reclassify').apply_to(instance)
+
     def _transformObject(self, obj):
         # If the object is a disjunction, transform it.
         if obj.type() == Disjunction and not obj.is_indexed():
