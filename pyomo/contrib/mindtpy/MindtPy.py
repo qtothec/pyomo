@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Implementation of the MindtPy solver.
 
-The MindtPy (MINLP Decomposition Tookit) solver applies a variety of
+The MindtPy (MINLP Decomposition Toolkit) solver applies a variety of
 decomposition-based approaches to solve nonlinear continuous-discrete problems.
 These approaches include:
 
@@ -102,7 +102,7 @@ class MindtPySolver(object):
         domain=PositiveFloat,
         description="Outer Approximation slack penalty factor",
         doc="In the objective function of the Outer Approximation method, the "
-            "slack variables correcponding to all the constraints get "
+            "slack variables corresponding to all the constraints get "
             "multiplied by this number and added to the objective"
     ))
     CONFIG.declare("ECP_tolerance", ConfigValue(
@@ -111,7 +111,7 @@ class MindtPySolver(object):
         description="ECP tolerance",
         doc="Feasibility tolerance used to determine the stopping criterion in"
             "the ECP method. As long as nonlinear constraint are violated for "
-            "more than this tolerance, the mothod will keep iterating"
+            "more than this tolerance, the method will keep iterating"
     ))
     CONFIG.declare("nlp_solver", ConfigValue(
         default="ipopt",
@@ -156,7 +156,7 @@ class MindtPySolver(object):
         domain=None,
         description="Function to be executed after every feasible subproblem",
         doc="Callback hook after a feasible solution"
-        " of the nonlinear subproblem."
+            " of the nonlinear subproblem."
     ))
     CONFIG.declare("tee", ConfigValue(
         default=False,
@@ -171,8 +171,8 @@ class MindtPySolver(object):
     CONFIG.declare("small_dual_tolerance", ConfigValue(
         default=1E-8,
         description="When generating cuts, small duals multiplied "
-        "by expressions can cause problems. Exclude all duals "
-        "smaller in absolue value than the following."
+                    "by expressions can cause problems. Exclude all duals "
+                    "smaller in absolute value than the following."
     ))
     CONFIG.declare("integer_tolerance", ConfigValue(
         default=1E-5,
@@ -188,11 +188,17 @@ class MindtPySolver(object):
     ))
     CONFIG.declare("zero_tolerance", ConfigValue(
         default=1E-15,
-        description="Tolerance on variable equal to zero."))
+        description="Tolerance on variable equal to zero."
+    ))
     CONFIG.declare("initial_feas", ConfigValue(
         default=True,
         description="Apply an initial feasibility step.",
         domain=bool
+    ))
+    CONFIG.declare("obj_bound", ConfigValue(
+        default=1E15,
+        domain=PositiveFloat,
+        description="Bound applied to the linearization of the objective function if master MILP is unbounded."
     ))
 
     def available(self, exception_flag=True):
@@ -226,8 +232,8 @@ class MindtPySolver(object):
 
         old_logger_level = config.logger.getEffectiveLevel()
         with time_code(solve_data.timing, 'total'), \
-                restore_logger_level(config.logger), \
-                create_utility_block(model, 'MindtPy_utils', solve_data):
+             restore_logger_level(config.logger), \
+             create_utility_block(model, 'MindtPy_utils', solve_data):
             if config.tee and old_logger_level > logging.INFO:
                 # If the logger does not already include INFO, include it.
                 config.logger.setLevel(logging.INFO)
