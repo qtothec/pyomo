@@ -203,7 +203,7 @@ opt = SolverFactory('gams')
 
 results = opt.solve (model, tee=True, solver='baron', add_options=['option reslim=120;'])
 
-print results
+print(results)
 
 model.pprint()
 

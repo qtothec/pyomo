@@ -135,7 +135,7 @@ opt = SolverFactory('gams')
 
 results = opt.solve (model, tee=True, solver='baron')
 
-print results
+print(results)
 
 model.pprint()
 

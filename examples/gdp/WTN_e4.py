@@ -138,12 +138,8 @@ def build_water_treatment_network_model():
 
 model = build_water_treatment_network_model()
 
-TransformationFactory('gdp.bigm').apply_to(model,bigM=1e8)
-
 opt = SolverFactory('gams')
+results = opt.solve(model, tee=True, solver='baron')
 
-results = opt.solve (model, tee=True, solver='baron')
-
-print results
-
+print(results)
 model.pprint()
