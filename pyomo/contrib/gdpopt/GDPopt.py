@@ -74,7 +74,7 @@ class GDPoptSolver(object):
         default=30, domain=NonNegativeInt,
         description="Iteration limit."
     ))
-    CONFIG.declare("reslim", ConfigValue(
+    CONFIG.declare("timelimit", ConfigValue(
         default=float('inf'), domain=NonNegativeFloat,
         description="Time limit (rudimentary). You need to also set subsolver time limits for now."
     ))
