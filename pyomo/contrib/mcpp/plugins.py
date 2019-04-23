@@ -8,9 +8,12 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 
-from .. import numpy_available, scipy_available
+from pyomo.common.download import DownloadFactory
+from pyomo.common.extensions import ExtensionBuilderFactory
+from .getMCPP import get_mcpp
+from .build import build_mcpp
 
-if numpy_available and scipy_available:
-    from .coo import empty_matrix, diagonal_matrix
-    from .block_vector import BlockVector
-    from .block_matrix import BlockMatrix, BlockSymMatrix
+def load():
+    DownloadFactory.register('mcpp')(get_mcpp)
+    ExtensionBuilderFactory.register('mcpp')(build_mcpp)
+
