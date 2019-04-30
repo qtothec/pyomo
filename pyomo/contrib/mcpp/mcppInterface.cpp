@@ -1,10 +1,18 @@
+/**___________________________________________________________________________
+ *
+ * Pyomo: Python Optimization Modeling Objects
+ * Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
+ * Under the terms of Contract DE-NA0003525 with National Technology and
+ * Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
+ * rights in this software.
+ * This software is distributed under the 3-clause BSD License.
+ * ___________________________________________________________________________
+**/
 #include "interval.hpp"
 #include "mccormick.hpp"
-#include "string.h"
+#include <sstream>
 typedef mc::Interval I;
 typedef mc::McCormick<I> MC;
-
-using std::ostringstream;
 
 // Module-level variables as utilities to pass information back to Python
 std::string lastException;
@@ -47,7 +55,8 @@ extern "C"
     }
     MC* powerx(MC *arg1, MC *arg2)
     {
-        // exponential is potentially a variable. Using reformulation x^n = exp(n log(x))
+        // exponential is potentially a variable. Using reformulation
+        // x^n = exp(n log(x))
         return (MC*) new MC( exp(*arg2 * log(*arg1)) );
     }
 
@@ -68,7 +77,7 @@ extern "C"
     // Get the MC++ string representation of the MC object
     const char* toString(MC *arg)
     {
-        ostringstream Fstrm;
+        std::ostringstream Fstrm;
         Fstrm << *arg << std::flush;
         lastDisplay = Fstrm.str();
         return lastDisplay.c_str();
