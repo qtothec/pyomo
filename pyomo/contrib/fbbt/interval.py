@@ -19,6 +19,8 @@ def mul(xl, xu, yl, yu):
 
 
 def inv(xl, xu):
+    if abs(xl) <= 1e-8 and abs(xu) <= 1e-8:
+        return -math.inf, math.inf
     if xl <= 0 and xu >= 0:
         return -math.inf, math.inf
     return 1.0/xu, 1.0/xl
