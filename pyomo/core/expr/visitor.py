@@ -112,6 +112,15 @@ class StreamBasedExpressionVisitor(object):
         child node are passed, and nothing is returned.  If afterChild
         is not specified, no action takes place.
 
+    walk, expr = initializeWalker(self, expr):
+
+        initializeWalker() is called to set the walker up and perform
+        any preliminary processing on the root node.  The method returns
+        a flag indicating if the tree should be walked and the (possibly
+        modified) root node of the expression.  If walk is False, then
+        the returned expr is passed to finalizeResult() (if defined) or
+        returned.
+
     finalizeResult(self, result):
 
         finalizeResult() is called once after the entire expression tree
@@ -131,7 +140,7 @@ class StreamBasedExpressionVisitor(object):
     # derived classes or specified as callback functions to the class
     # constructor:
     client_methods = ('enterNode','exitNode','beforeChild','afterChild',
-                      'acceptChildResult','finalizeResult')
+                      'acceptChildResult','initializeWalker','finalizeResult')
     def __init__(self, **kwds):
         # This is slightly tricky: We want derived classes to be able to
         # override the "None" defaults here, and for keyword arguments
@@ -164,6 +173,14 @@ class StreamBasedExpressionVisitor(object):
         # (ptr).  The beginning of the list is indicated by a None
         # parent pointer.
         #
+        if self.initializeWalker is not None:
+            walk, expr = self.initializeWalker(expr)
+            if not walk:
+                if self.finalizeResult is not None:
+                    return self.finalizeResult(expr)
+                else:
+                    return expr
+
         if self.enterNode is not None:
             tmp = self.enterNode(expr)
             if tmp is None:
