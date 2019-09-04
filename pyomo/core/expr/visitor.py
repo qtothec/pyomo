@@ -155,6 +155,7 @@ class StreamBasedExpressionVisitor(object):
         if kwds:
             raise RuntimeError("Unrecognized keyword arguments: %s" % (kwds,))
 
+    #@profile
     def walk_expression(self, expr):
         """Walk an expression, calling registered callbacks.
         """
@@ -300,6 +301,111 @@ class StreamBasedExpressionVisitor(object):
                     data = self.acceptChildResult(node, data, node_result)
                 elif data is not None:
                     data.append(node_result)
+
+                # And let the node know that we are done with a child node
+                if self.afterChild is not None:
+                    self.afterChild(node, child)
+
+class StreamBasedExpressionVisitor_allCallbacks(StreamBasedExpressionVisitor):
+    @profile
+    def walk_expression(self, expr):
+        """Walk an expression, calling registered callbacks.
+        """
+        #
+        # This walker uses a linked list to store the stack (instead of
+        # an array).  The nodes of the linked list are 6-member tuples:
+        #
+        #    ( pointer to parent,
+        #      expression node,
+        #      tuple/list of child nodes (arguments),
+        #      number of child nodes (arguments),
+        #      data object to aggregate results from child nodes,
+        #      current child node )
+        #
+        # The walker only needs a single pointer to the end of the list
+        # (ptr).  The beginning of the list is indicated by a None
+        # parent pointer.
+        #
+        walk, expr = self.initializeWalker(expr)
+        if not walk:
+            return self.finalizeResult(expr)
+
+        args, data = self.enterNode(expr)
+
+        node = expr
+        child_idx = 0
+        ptr = (None, node, args, len(args), data, child_idx)
+
+        while 1:
+            if child_idx < ptr[3]:
+                # This node still has children to process
+                child = ptr[2][child_idx]
+                # Increment the child index pointer here for
+                # consistency.  Note that this means that for the bulk
+                # of the time, 'child_idx' is actually the index of the
+                # *next* child to be processed, and will not match the
+                # value of ptr[5].  This provides a modest performance
+                # improvement, as we only have to recreate the ptr tuple
+                # just before we descend further into the tree (i.e., we
+                # avoid recreating the tuples for the special case where
+                # beforeChild indicates that we should not descend
+                # further).
+                child_idx += 1
+
+                # Notify this node that we are about to descend into a
+                # child.
+                tmp = self.beforeChild(node, child)
+                if tmp is None:
+                    descend = True
+                    child_result = None
+                else:
+                    descend, child_result = tmp
+                if not descend:
+                    # We are aborting processing of this child node.
+                    # Tell this node to accept the child result and
+                    # we will move along
+                    data = self.acceptChildResult(node, data, child_result)
+                    # And let the node know that we are done with a
+                    # child node
+                    if self.afterChild is not None:
+                        self.afterChild(node, child)
+                    # Jump to the top to continue processing the
+                    # next child node
+                    continue
+
+                # Update the child argument counter in the stack.
+                # Because we are using tuples, we need to recreate the
+                # "ptr" object (linked list node)
+                ptr = ptr[:4] + (data, child_idx,)
+
+                # We are now going to actually enter this node.  The
+                # node will tell us the list of its child nodes that we
+                # need to process
+                args, data = self.enterNode(child)
+
+                node = child
+                child_idx = 0
+                ptr = (ptr, node, args, len(args), data, child_idx)
+
+            else:
+                # We are done with this node.  Call exitNode to compute
+                # any result
+                node_result = self.exitNode(node, data)
+
+                # Pop the node off the linked list
+                ptr = ptr[0]
+                # If we have returned to the beginning, return the final
+                # answer
+                if ptr is None:
+                    return self.finalizeResult(node_result)
+                # Not done yet, update node to point to the new active
+                # node
+                node, child = ptr[1], node
+                data = ptr[4]
+                child_idx = ptr[5]
+
+                # We need to alert the node to accept the child's result:
+                data = self.acceptChildResult(node, data, node_result)
 
                 # And let the node know that we are done with a child node
                 if self.afterChild is not None:

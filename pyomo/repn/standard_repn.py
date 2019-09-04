@@ -12,6 +12,7 @@ from __future__ import division
 
 __all__ = ['StandardRepn', 'generate_standard_repn']
 
+OLD = False
 
 import sys
 import logging
@@ -390,23 +391,37 @@ def OLD_generate_standard_repn(expr, idMap=None, compute_values=True, verbose=Fa
 from pyomo.repn.new_standard_repn import (
     QuadraticStandardExpressionVisitor, GeneralStandardExpressionVisitor
 )
-def generate_standard_repn(
+_quadVisitor = QuadraticStandardExpressionVisitor()
+def NEW_generate_standard_repn(
         expr, idMap=None, compute_values=True, verbose=False, quadratic=True,
         repn=None):
     assert not verbose
     assert repn is None
-    #tic("")
     if not compute_values or idMap is not None:
-        #print("OLD STANDARD REPN")
+        print("OLD STANDARD REPN")
         ans = OLD_generate_standard_repn(expr, idMap, compute_values, 
                                           verbose, quadratic, repn)
     elif quadratic:
         #print("NEW (quadratic) STANDARD REPN")
-        ans = QuadraticStandardExpressionVisitor().walk_expression(expr)
+        ans = _quadVisitor.walk_expression(expr)
     else:
         #print("NEW (general) STANDARD REPN")
         ans = GeneralStandardExpressionVisitor().walk_expression(expr)
-    #toc()
+    return ans
+
+def generate_standard_repn(
+    expr, idMap=None, compute_values=True, verbose=False, quadratic=True,
+    repn=None):
+    tic("")
+    if OLD:
+        ans = OLD_generate_standard_repn(
+            expr, idMap, compute_values, verbose, quadratic, repn)
+    else:
+        ans = NEW_generate_standard_repn(
+            expr, idMap, compute_values, verbose, quadratic, repn)
+    dt = toc("")
+    if dt > 0.001:
+        print dt,
     return ans
 
 ##-----------------------------------------------------------------------
