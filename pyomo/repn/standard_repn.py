@@ -25,7 +25,7 @@ from pyomo.core.base import (Constraint,
 
 import pyomo.common
 from pyutilib.misc import Bunch
-from pyutilib.misc.timing import tic, toc
+from pyutilib.misc.timing import TicTocTimer
 from pyutilib.math.util import isclose as isclose_default
 
 from pyomo.core.expr import current as EXPR
@@ -410,17 +410,19 @@ def NEW_generate_standard_repn(
         ans = GeneralStandardExpressionVisitor().walk_expression(expr)
     return ans
 
+timer = TicTocTimer()
+timer.stop()
 def generate_standard_repn(
     expr, idMap=None, compute_values=True, verbose=False, quadratic=True,
     repn=None):
-    tic("")
+    timer.start()
     if OLD:
         ans = OLD_generate_standard_repn(
             expr, idMap, compute_values, verbose, quadratic, repn)
     else:
         ans = NEW_generate_standard_repn(
             expr, idMap, compute_values, verbose, quadratic, repn)
-    dt = toc("")
+    dt = timer.stop()
     if dt > 0.001:
         print dt,
     return ans
