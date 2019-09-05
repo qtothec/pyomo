@@ -1,3 +1,5 @@
+from __future__ import division
+
 from pyomo.repn.standard_repn import StandardRepn
 
 from pyomo.core.expr import (
@@ -21,22 +23,74 @@ _MONOMIAL = 2
 _LINEAR = 4
 _GENERAL = 8
 
-def profile(x):
-    return x
+if 'profile' not in __builtins__:
+    def profile(x):
+        return x
+
+REMOVE_ZERO_COEF = True
+
+class _linearRepn(object):
+    __slots__ = ('coef','vars','const')
+
+    def __init__(self):
+        self.coef = {}
+        self.vars = []
+        self.const = 0
+
+    def merge(self, other):
+        self.const += other.const
+        for v in other.vars:
+            _id = id(v)
+            coef = other.coef[_id]
+            if _id in self.coef:
+                self.coef[_id] += coef
+            elif coef:
+                self.coef[_id] = coef
+                self.vars.append(v)
+        other.const = 0
+        other.coef.clear()
+        other.vars = []
+
+    def toLinearExpr(self):
+        ans = LinearExpression()
+        ans.constant, self.const = self.const, 0
+        ans.linear_coefs = list(self.coef[id(v)] for v in self.vars)
+        ans.linear_vars, self.vars = self.vars, []
+        if REMOVE_ZERO_COEF:
+            try:
+                i = 0
+                while 1:
+                    i = ans.linear_coefs.index(0,i)
+                    ans.linear_coefs.pop(i)
+                    ans.linear_vars.pop(i)
+            except ValueError:
+                pass
+        self.coef.clear()
+        return ans
+
+    def fromLinearExpr(self, linear):
+        self.const += child.constant
+        for i,coef in enumerate(child.linear_coefs):
+            if not coef:
+                continue
+            v = child.linear_vars[i]
+            _id = id(v)
+            if _if in linear.coef:
+                linear.coef[_id] += coef
+            else:
+                linear.coef[_id] = coef
+                linear.vars.append(v)
+
 
 class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks):
     linearExprPool = None
 
     @profile
     def initializeWalker(self, expr):
-        if type(expr) in native_types:
-            return False, (_CONSTANT, expr)
-        elif not expr.is_expression_type():
-            if expr.is_fixed():
-                return False, (_CONSTANT, value(expr))
-            else:
-                return False, (_MONOMIAL, 1, expr)
-        return True, expr
+        walk, result = self.beforeChild(None, expr)
+        if walk:
+            result = expr
+        return walk, result
 
     @profile
     def beforeChild(self, node, child):
@@ -49,49 +103,58 @@ class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks
             else:
                 return False, (_MONOMIAL, 1, child)
 
-        if child_type is not LinearExpression:
-            return True, None
+        #
+        # The following are performance optimizations for common
+        # situations (Monomial terms and Product expressions that are in
+        # fact monomial terms)
+        #
 
-        print "COPY Linear Expr!"
-        # Because we are going to modify the LinearExpression in this
-        # walker, we need to make a copy of the LinearExpression from
-        # the original expression tree.
-        linear = self._get_linear()
-        idMap = {}
-        zeros = set()
-        next_pos = 0
-
-        linear.constant = child.constant
-        for c, v in zip(child.linear_coefs, child.linear_vars):
-            c = value(c)
-            if not c:
-                continue
-            elif v.is_fixed():
-                linear.constant += c*value(v)
+        if child_type is MonomialTermExpression:
+            arg1, arg2 = child._args_
+            if arg1.__class__ not in native_types:
+                arg1 = value(arg1)
+            if arg2.is_fixed():
+                return False, (_CONSTANT, child())
             else:
-                _id = id(v)
-                if _id in idMap:
-                    i = idMap[_id]
-                    linear.linear_coefs[i] += c
-                    if not linear.linear_coefs[i]:
-                        zeros.add(i)
-                else:
-                    idMap[_id] = next_pos
-                    next_pos += 1
-                    linear.linear_vars.append(v)
-                    linear.linear_coefs.append(c)
-        if zeros:
-            self._finalize_linear(zeros, linear)
-        return False, (_LINEAR, linear)
+                return False, (_MONOMIAL, arg1, arg2)
+
+        if child_type is LinearExpression:
+            print "COPY Linear Expr!"
+            # Because we are going to modify the LinearExpression in this
+            # walker, we need to make a copy of the LinearExpression from
+            # the original expression tree.
+            linear = self._get_linear()
+            linear.fromLinearExpr(child)
+            return False, (_LINEAR, linear)
+
+        # if child_type is ProductExpression:
+        #     arg1, arg2 = child._args_
+        #     if arg1.__class__ in native_types or (
+        #             not arg1.is_expression_type() and arg1.is_fixed()):
+        #         if arg2.__class__ in native_types:
+        #             return False, (_CONSTANT, child())
+        #         elif not arg2.is_expression_type():
+        #             if arg2.is_fixed():
+        #                 return False, (_CONSTANT, child())
+        #             else:
+        #                 return False, (_MONOMIAL, value(arg1), arg2)
+        #     elif arg2.__class__ in native_types or (
+        #             not arg2.is_expression_type() and arg2.is_fixed()):
+        #         if not arg1.is_expression_type():
+        #             # We know arg1 is not fixed...
+        #             return False, (_MONOMIAL, value(arg2), arg1)
+
+        return True, None
 
     def afterChild(self, node, child):
         pass
 
     @profile
     def enterNode(self, node):
-        if node._precedence() != SumExpressionBase.PRECEDENCE:
+        if isinstance(node, SumExpressionBase):
+            return node._args_, self._get_linear()
+        else:
             return node._args_, []
-        return node._args_, ({}, set(), self._get_linear())
 
     @profile
     def acceptChildResult(self, node, data, child_result):
@@ -100,66 +163,35 @@ class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks
             data.append(child_result)
         else:
             # Linear Expression
-            idMap, zeros, linear = data
             child_type = child_result[0]
             if child_type is _MONOMIAL:
                 _id = id(child_result[2])
-                if _id not in idMap:
-                    idMap[_id] = idx = len(linear.linear_coefs)
-                    linear.linear_coefs.append(child_result[1])
-                    linear.linear_vars.append(child_result[2])
+                if _id in data.coef:
+                    data.coef[_id] += child_result[1]
                 else:
-                    idx = idMap[_id]
-                    linear.linear_coefs[idx] += child_result[1]
-                if not linear.linear_coefs[idx]:
-                    zeros.add(idx)
+                    data.coef[_id] = child_result[1]
+                    data.vars.append(child_result[2])
             elif child_type is _CONSTANT:
-                linear.constant += child_result[1]
+                data.const += child_result[1]
             elif child_type is _LINEAR:
                 child = child_result[1]
-                next_id = len(linear.linear_coefs)
-                linear.constant += child.constant
-                for i in xrange(len(child.linear_coefs)):
-                    _id = id(child.linear_vars[i])
-                    if _id not in idMap:
-                        idMap[_id] = idx = next_id
-                        next_id += 1
-                        linear.linear_coefs.append(child.linear_coefs[i])
-                        linear.linear_vars.append(child.linear_vars[i])
-                    else:
-                        idx = idMap[_id]
-                        linear.linear_coefs[idx] += child.linear_coefs[i]
-                    if not linear.linear_coefs[idx]:
-                        zeros.add(idx)
+                data.merge(child)
+                self.linearExprPool = (self.linearExprPool, child)
             elif child_type is _GENERAL:
-                print "ERROR"
-                # General (nonlinear) sub-expression.  We will convert
-                # this from a Linear expression to a general summation
-                if zeros:
-                    self._finalize_linear(zeros, linear)
-                if linear.constant or linear.linear_vars:
-                    if not linear.linear_coefs:
-                        const, linear.constant = linear.constant, 0
-                        self.linearExprPool = (self.linearExprPool, linear)
+                if data.const or data.vars:
+                    if not data.vars:
+                        const, data.const = data.const, 0
+                        self.linearExprPool = (self.linearExprPool, data)
                         return [(_CONSTANT, const), child_result]
-                    return [(_LINEAR, linear), child_result]
+                    return [(_LINEAR, data), child_result]
                 else:
                     return [child_result]
-
         return data
 
     @profile
     def exitNode(self, node, data):
-        if data.__class__ is tuple:
-            # Linear expression
-            _, zeros, linear = data
-            if zeros:
-                self._finalize_linear(zeros, linear)
-                if not linear.linear_coefs:
-                    const, linear.constant = linear.constant, 0
-                    self.linearExprPool = (self.linearExprPool, linear)
-                    return (_CONSTANT, const)
-            return (_LINEAR, linear)
+        if data.__class__ is _linearRepn:
+            return (_LINEAR, data)
         #
         # General (nonlinear) expression...
         #
@@ -204,7 +236,9 @@ class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks
 
         # We need to convert data to valid expression objects
         print "exit general"
-        args = tuple(_[1]*_[2] if _[0] is _MONOMIAL else _[1])
+        args = tuple( _[1]*_[2] if _[0] is _MONOMIAL
+                      else _[1].toLinearExpr() if _[0] is _LINEAR
+                      else _[1] for _ in data)
         if all(_[0] is _CONSTANT for _ in data):
             return node._apply_operation(args)
         return (_GENERAL, node.create_node_with_local_data(args))
@@ -215,12 +249,19 @@ class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks
         ans = StandardRepn()
         if result_type is _LINEAR:
             expr = result[1]
-            ans.constant = expr.constant
-            ans.linear_vars = tuple(expr.linear_vars)
-            ans.linear_coefs = tuple(expr.linear_coefs)
-            expr.constant = 0
-            expr.linear_vars = []
-            expr.linear_coefs = []
+            ans.constant, expr.const = expr.const, 0
+            ans.linear_coefs = list(expr.coef[id(v)] for v in expr.vars)
+            if REMOVE_ZERO_COEF:
+                try:
+                    i = 0
+                    while 1:
+                        i = ans.linear_coefs.index(0,i)
+                        ans.linear_coefs.pop(i)
+                        ans.linear_vars.pop(i)
+                except ValueError:
+                    pass
+            expr.coef.clear()
+            ans.linear_vars, expr.vars = expr.vars, []
             self.linearExprPool = (self.linearExprPool, expr)
         elif result_type is _GENERAL:
             print "TODO: Separate Linear and Nonlinear terms"
@@ -270,7 +311,7 @@ class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks
             self.linearExprPool, ans = self.linearExprPool
             return ans
         else:
-            return LinearExpression()
+            return _linearRepn()
 
     @profile
     def _finalize_linear(zeros, linear):

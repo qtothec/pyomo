@@ -33,6 +33,9 @@ from pyomo.core.expr.numvalue import (
 # into this module by the .current module (which must be imported
 # *after* numeric_expr, logocal_expr, and this module.
 
+if 'profile' not in __builtins__:
+    def profile(x):
+        return x
 
 #-------------------------------------------------------
 #
@@ -354,12 +357,7 @@ class StreamBasedExpressionVisitor_allCallbacks(StreamBasedExpressionVisitor):
 
                 # Notify this node that we are about to descend into a
                 # child.
-                tmp = self.beforeChild(node, child)
-                if tmp is None:
-                    descend = True
-                    child_result = None
-                else:
-                    descend, child_result = tmp
+                descend, child_result = self.beforeChild(node, child)
                 if not descend:
                     # We are aborting processing of this child node.
                     # Tell this node to accept the child result and
@@ -367,8 +365,7 @@ class StreamBasedExpressionVisitor_allCallbacks(StreamBasedExpressionVisitor):
                     data = self.acceptChildResult(node, data, child_result)
                     # And let the node know that we are done with a
                     # child node
-                    if self.afterChild is not None:
-                        self.afterChild(node, child)
+                    self.afterChild(node, child)
                     # Jump to the top to continue processing the
                     # next child node
                     continue
@@ -408,8 +405,7 @@ class StreamBasedExpressionVisitor_allCallbacks(StreamBasedExpressionVisitor):
                 data = self.acceptChildResult(node, data, node_result)
 
                 # And let the node know that we are done with a child node
-                if self.afterChild is not None:
-                    self.afterChild(node, child)
+                self.afterChild(node, child)
 
 
 class SimpleExpressionVisitor(object):

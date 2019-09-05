@@ -102,12 +102,13 @@ class StandardRepn(object):
 
     def __init__(self):
         self.constant = 0
-        self.linear_vars = tuple()
-        self.linear_coefs = tuple()
-        self.quadratic_vars = tuple()
-        self.quadratic_coefs = tuple()
+        self.linear_vars = \
+            self.linear_coefs = \
+            self.quadratic_vars = \
+            self.quadratic_coefs = \
+            self.nonlinear_vars = tuple()
         self.nonlinear_expr = None
-        self.nonlinear_vars = tuple()
+
 
     def __getstate__(self):
         """
@@ -399,7 +400,7 @@ def NEW_generate_standard_repn(
     assert repn is None
     if not compute_values or idMap is not None:
         print("OLD STANDARD REPN")
-        ans = OLD_generate_standard_repn(expr, idMap, compute_values, 
+        ans = OLD_generate_standard_repn(expr, idMap, compute_values,
                                           verbose, quadratic, repn)
     elif quadratic:
         #print("NEW (quadratic) STANDARD REPN")
