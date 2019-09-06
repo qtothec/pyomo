@@ -423,19 +423,11 @@ class GeneralStandardExpressionVisitor_inlined(object):
                 # Before Child
                 ##
                 child_type = child.__class__
-                if child_type in native_types:
-                    node_result = (_CONSTANT, child)
-                elif not child.is_expression_type():
-                    if child.is_fixed():
-                        node_result = (_CONSTANT, value(child))
-                    else:
-                        node_result = (_MONOMIAL, 1, child)
                 #
                 # The following are performance optimizations for common
-                # situations (Monomial terms and Product expressions that are in
-                # fact monomial terms)
+                # situations (Monomial terms)
                 #
-                elif child_type is MonomialTermExpression:
+                if child_type is MonomialTermExpression:
                     arg1, arg2 = child._args_
                     if arg1.__class__ not in native_types:
                         arg1 = value(arg1)
@@ -443,6 +435,13 @@ class GeneralStandardExpressionVisitor_inlined(object):
                         node_result = (_CONSTANT, child())
                     else:
                         node_result = (_MONOMIAL, arg1, arg2)
+                elif child_type in native_types:
+                    node_result = (_CONSTANT, child)
+                elif not child.is_expression_type():
+                    if child.is_fixed():
+                        node_result = (_CONSTANT, value(child))
+                    else:
+                        node_result = (_MONOMIAL, 1, child)
                 elif child_type is LinearExpression:
                     print("COPY Linear Expr!")
                     # Because we are going to modify the
@@ -486,7 +485,8 @@ class GeneralStandardExpressionVisitor_inlined(object):
                             arg1, arg2 = data
                         if arg1[0] is _CONSTANT:
                             if arg2[0] is _MONOMIAL:
-                                node_result = (_MONOMIAL, arg1[1]*arg2[1], arg2[2])
+                                node_result = (
+                                    _MONOMIAL, arg1[1]*arg2[1], arg2[2])
                             elif arg2[0] is _LINEAR:
                                 mul = arg1[1]
                                 arg2[1].constant *= mul
@@ -500,7 +500,8 @@ class GeneralStandardExpressionVisitor_inlined(object):
                         if arg2[0] is _CONSTANT:
                             div = arg2[1]
                             if arg1[0] is _MONOMIAL:
-                                node_result = (_MONOMIAL, (arg1[1]/div, arg1[2]))
+                                node_result = (
+                                    _MONOMIAL, (arg1[1]/div, arg1[2]))
                             elif arg1[0] is _LINEAR:
                                 arg1[1].constant /= div
                                 for i in xrange(len(arg1[1].linear_coefs)):
@@ -522,8 +523,9 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     else:
                         node_result = (
                             _GENERAL, node.create_node_with_local_data(args))
-
+                ##
                 # Pop the node
+                ##
                 ptr = ptr[0]
                 # If we have returned to the beginning, return the final
                 # answer
