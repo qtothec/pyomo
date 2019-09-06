@@ -55,7 +55,7 @@ def _ftoa(val):
         else:
             raise ValueError("non-fixed bound or weight: " + str(exp))
 
-    a = _ftoa.precision_str % val
+    a = _precision_str % val
     i = len(a)
     while i > 1:
         try:
@@ -84,7 +84,7 @@ def _ftoa(val):
 #               relies on using '%+' before the formatting character
 #               and you will need to go add extra logic to output
 #               the number's sign.
-_ftoa.precision_str = '%.17g'
+_precision_str = '%.17g'
 
 
 #
