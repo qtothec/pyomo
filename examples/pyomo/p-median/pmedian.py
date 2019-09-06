@@ -51,3 +51,10 @@ def pyomo_create_model(options=None, model_options=None):
     model.num_facilities = Constraint(rule=rule)
 
     return model
+
+if __name__ == '__main__':
+    from pyomo.environ import *
+    from pyomo.opt import WriterFactory
+    m = pyomo_create_model()
+    i = m.create_instance('pmedian.test7.dat')
+    WriterFactory('lp')(i, 'pmedian.test7.lp', lambda x: True, {})
