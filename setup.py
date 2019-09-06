@@ -102,13 +102,16 @@ if using_cython:
             #"pyomo/core/expr/visitor.pyx",
             "pyomo/core/util.pyx",
             "pyomo/repn/standard_repn.pyx",
+            "pyomo/repn/new_standard_repn.pyx",
             "pyomo/repn/plugins/cpxlp.pyx",
             "pyomo/repn/plugins/gams_writer.pyx",
             "pyomo/repn/plugins/baron_writer.pyx",
             "pyomo/repn/plugins/ampl/ampl_.pyx",
         ]
         for f in files:
-            shutil.copyfile(f[:-1], f)
+            if not os.path.exists(f) \
+               or os.stat(f[:-1]).st_mtime > os.stat(f).st_mtime:
+                shutil.copyfile(f[:-1], f)
         ext_modules = cythonize(files, compiler_directives={
             "language_level": 3 if sys.version_info >= (3, ) else 2})
     except:
