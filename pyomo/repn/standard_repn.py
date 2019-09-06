@@ -423,8 +423,8 @@ def generate_standard_repn(
         ans = NEW_generate_standard_repn(
             expr, idMap, compute_values, verbose, quadratic, repn)
     dt = timer.stop()
-    if dt > 0.001:
-        print dt,
+    if dt > 0.01:
+        sys.stdout.write(str(dt)+" ")
     return ans
 
 ##-----------------------------------------------------------------------

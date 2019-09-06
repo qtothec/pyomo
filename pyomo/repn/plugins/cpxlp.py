@@ -175,7 +175,9 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                     include_all_variable_bounds=include_all_variable_bounds)
 
         self._referenced_variable_ids.clear()
-
+        import pyomo.repn.standard_repn
+        print("")
+        pyomo.repn.standard_repn.timer.toc("TOTAL Standard Repn Time")
         return output_filename, symbol_map
 
     def _print_expr_canonical(self,

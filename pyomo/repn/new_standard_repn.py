@@ -121,7 +121,7 @@ class GeneralStandardExpressionVisitor_streambased(
                 return False, (_MONOMIAL, arg1, arg2)
 
         if child_type is LinearExpression:
-            print "COPY Linear Expr!"
+            print("COPY Linear Expr!")
             # Because we are going to modify the LinearExpression in this
             # walker, we need to make a copy of the LinearExpression from
             # the original expression tree.
@@ -237,7 +237,7 @@ class GeneralStandardExpressionVisitor_streambased(
                         return (_CONSTANT, arg1[1]/arg2[1])
 
         # We need to convert data to valid expression objects
-        print "exit general"
+        print("exit general")
         args = tuple( _[1]*_[2] if _[0] is _MONOMIAL
                       else _[1].toLinearExpr() if _[0] is _LINEAR
                       else _[1] for _ in data)
@@ -266,7 +266,7 @@ class GeneralStandardExpressionVisitor_streambased(
             ans.linear_vars, expr.vars = expr.vars, []
             self.linearExprPool = (self.linearExprPool, expr)
         elif result_type is _GENERAL:
-            print "TODO: Separate Linear and Nonlinear terms"
+            print("TODO: Separate Linear and Nonlinear terms")
             if isinstance(expr, SumExpressionBase):
                 linear_terms = []
                 linear = self._get_linear()
@@ -296,7 +296,7 @@ class GeneralStandardExpressionVisitor_streambased(
             ans.nonlinear_expr = expr
             ans.nonlinear_vars = list(identify_variables(expr))
         elif result_type is _MONOMIAL:
-            print "FINALIZE monomial"
+            print("FINALIZE monomial")
             if result[1]:
                 ans.linear_coefs = (result[1],)
                 ans.linear_vars = (result[2],)
@@ -317,7 +317,7 @@ class GeneralStandardExpressionVisitor_streambased(
 
     @profile
     def _finalize_linear(zeros, linear):
-        print "NOTE! finalize linear"
+        print("NOTE! finalize linear")
         for i in reversed(sorted(zeros)):
             if not linear.linear_coefs[i]:
                 linear.linear_coefs.pop(i)
@@ -444,10 +444,11 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     else:
                         node_result = (_MONOMIAL, arg1, arg2)
                 elif child_type is LinearExpression:
-                    print "COPY Linear Expr!"
-                    # Because we are going to modify the LinearExpression in this
-                    # walker, we need to make a copy of the LinearExpression from
-                    # the original expression tree.
+                    print("COPY Linear Expr!")
+                    # Because we are going to modify the
+                    # LinearExpression in this walker, we need to make a
+                    # copy of the LinearExpression from the original
+                    # expression tree.
                     linear = self._get_linear()
                     linear.fromLinearExpr(child)
                     node_result = (_LINEAR, linear)
@@ -512,7 +513,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
 
                 if node_result is None:
                     # We need to convert data to valid expression objects
-                    print "exit general"
+                    print("exit general")
                     args = tuple( _[1]*_[2] if _[0] is _MONOMIAL
                                   else _[1].toLinearExpr() if _[0] is _LINEAR
                                   else _[1] for _ in data)
@@ -548,7 +549,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                         ans.linear_vars, expr.vars = expr.vars, []
                         self.linearExprPool = (self.linearExprPool, expr)
                     elif result_type is _GENERAL:
-                        print "TODO: Separate Linear and Nonlinear terms"
+                        print("TODO: Separate Linear and Nonlinear terms")
                         if isinstance(expr, SumExpressionBase):
                             linear_terms = []
                             linear = self._get_linear()
@@ -578,7 +579,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                         ans.nonlinear_expr = expr
                         ans.nonlinear_vars = list(identify_variables(expr))
                     elif result_type is _MONOMIAL:
-                        print "FINALIZE monomial"
+                        print("FINALIZE monomial")
                         if result[1]:
                             ans.linear_coefs = (result[1],)
                             ans.linear_vars = (result[2],)
