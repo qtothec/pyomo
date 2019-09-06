@@ -106,7 +106,7 @@ class StandardRepn(object):
             self.linear_coefs = \
             self.quadratic_vars = \
             self.quadratic_coefs = \
-            self.nonlinear_vars = tuple()
+            self.nonlinear_vars = ()
         self.nonlinear_expr = None
 
 
