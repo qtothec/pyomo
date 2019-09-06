@@ -27,7 +27,8 @@ if 'profile' not in __builtins__:
     def profile(x):
         return x
 
-REMOVE_ZERO_COEF = True
+REMOVE_ZERO_COEF = False
+INLINE = True
 
 class _linearRepn(object):
     __slots__ = ('coef','vars','const')
@@ -82,7 +83,8 @@ class _linearRepn(object):
                 linear.vars.append(v)
 
 
-class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks):
+class GeneralStandardExpressionVisitor_streambased(
+        StreamBasedExpressionVisitor_allCallbacks):
     linearExprPool = None
 
     @profile
@@ -363,6 +365,284 @@ class GeneralStandardExpressionVisitor(StreamBasedExpressionVisitor_allCallbacks
             # Nonlinear expression
             return False
         return True
+
+
+class GeneralStandardExpressionVisitor_inlined(object):
+    linearExprPool = None
+
+    @profile
+    def walk_expression(self, expr):
+        ##
+        # Initialize walker
+        ##
+        expr_type = expr.__class__
+        if expr_type in native_types:
+            ans = StandardRepn()
+            ans.constant = expr
+            return ans
+        elif not expr.is_expression_type():
+            ans = StandardRepn()
+            if expr.is_fixed():
+                ans.constant = value(expr)
+            else:
+                ans.linear_vars = (expr,)
+                ans.linear_coefs = (1,)
+            return ans
+        elif expr_type is MonomialTermExpression:
+            ans = StandardRepn()
+            coef = value(expr._args_[0])
+            if coef:
+                v = expr._args_[1]
+                if v.is_fixed():
+                    ans.constant = value(v) * coef
+                else:
+                    ans.linear_vars = (v,)
+                    ans.linear_coefs = (coef,)
+            return ans
+
+        ##
+        # Enter Node
+        ##
+        args = expr._args_
+        if isinstance(expr, SumExpressionBase):
+            data = self._get_linear()
+        else:
+            data = []
+        #
+        nargs = len(args)
+        node = expr
+        child_idx = 0
+        ptr = (None, node, args, nargs, data, child_idx)
+
+        while 1:
+            if child_idx < nargs:
+                child = args[child_idx]
+                child_idx += 1
+
+                ##
+                # Before Child
+                ##
+                child_type = child.__class__
+                if child_type in native_types:
+                    node_result = (_CONSTANT, child)
+                elif not child.is_expression_type():
+                    if child.is_fixed():
+                        node_result = (_CONSTANT, value(child))
+                    else:
+                        node_result = (_MONOMIAL, 1, child)
+                #
+                # The following are performance optimizations for common
+                # situations (Monomial terms and Product expressions that are in
+                # fact monomial terms)
+                #
+                elif child_type is MonomialTermExpression:
+                    arg1, arg2 = child._args_
+                    if arg1.__class__ not in native_types:
+                        arg1 = value(arg1)
+                    if arg2.is_fixed():
+                        node_result = (_CONSTANT, child())
+                    else:
+                        node_result = (_MONOMIAL, arg1, arg2)
+                elif child_type is LinearExpression:
+                    print "COPY Linear Expr!"
+                    # Because we are going to modify the LinearExpression in this
+                    # walker, we need to make a copy of the LinearExpression from
+                    # the original expression tree.
+                    linear = self._get_linear()
+                    linear.fromLinearExpr(child)
+                    node_result = (_LINEAR, linear)
+                else:
+                    ##
+                    # Descend into child
+                    ##
+                    ptr = ptr[:4] + (data, child_idx,)
+                    ##
+                    # Enter Node
+                    ##
+                    args = child._args_
+                    if isinstance(child, SumExpressionBase):
+                        data = self._get_linear()
+                    else:
+                        data = []
+                    #
+                    nargs = len(args)
+                    node = child
+                    child_idx = 0
+                    ptr = (ptr, node, args, nargs, data, child_idx)
+                    continue
+            else:
+                ##
+                # Exit Node
+                ##
+                if data.__class__ is _linearRepn:
+                    node_result = (_LINEAR, data)
+                elif len(data) == 2:
+                    node_result = None
+                    if isinstance(node, ProductExpression):
+                        if data[1][0] is _CONSTANT:
+                            arg2, arg1 = data
+                        else:
+                            arg1, arg2 = data
+                        if arg1[0] is _CONSTANT:
+                            if arg2[0] is _MONOMIAL:
+                                node_result = (_MONOMIAL, arg1[1]*arg2[1], arg2[2])
+                            elif arg2[0] is _LINEAR:
+                                mul = arg1[1]
+                                arg2[1].constant *= mul
+                                for i in xrange(len(arg2[1].linear_coefs)):
+                                    arg2[1].linear_coefs[i] *= mul
+                                node_result = arg2
+                            elif arg2[0] is _CONSTANT:
+                                node_result = (_CONSTANT, arg1[1]*arg2[1])
+                    elif isinstance(node, DivisionExpression):
+                        arg1, arg2 = data
+                        if arg2[0] is _CONSTANT:
+                            div = arg2[1]
+                            if arg1[0] is _MONOMIAL:
+                                node_result = (_MONOMIAL, (arg1[1]/div, arg1[2]))
+                            elif arg1[0] is _LINEAR:
+                                arg1[1].constant /= div
+                                for i in xrange(len(arg1[1].linear_coefs)):
+                                    arg1[1].linear_coefs[i] /= div
+                                node_result = arg1
+                            elif arg1[0] is _CONSTANT:
+                                node_result = (_CONSTANT, arg1[1]/arg2[1])
+                else:
+                    node_result = None
+
+                if node_result is None:
+                    # We need to convert data to valid expression objects
+                    print "exit general"
+                    args = tuple( _[1]*_[2] if _[0] is _MONOMIAL
+                                  else _[1].toLinearExpr() if _[0] is _LINEAR
+                                  else _[1] for _ in data)
+                    if all(_[0] is _CONSTANT for _ in data):
+                        node_result = (_CONSTANT, node._apply_operation(args))
+                    else:
+                        node_result = (
+                            _GENERAL, node.create_node_with_local_data(args))
+
+                # Pop the node
+                ptr = ptr[0]
+                # If we have returned to the beginning, return the final
+                # answer
+                if ptr is None:
+                    ##
+                    # Finalize Result
+                    ##
+                    result_type, expr = node_result
+                    ans = StandardRepn()
+                    if result_type is _LINEAR:
+                        ans.constant, expr.const = expr.const, 0
+                        ans.linear_coefs = list(expr.coef[id(v)] for v in expr.vars)
+                        if REMOVE_ZERO_COEF:
+                            try:
+                                i = 0
+                                while 1:
+                                    i = ans.linear_coefs.index(0,i)
+                                    ans.linear_coefs.pop(i)
+                                    ans.linear_vars.pop(i)
+                            except ValueError:
+                                pass
+                        expr.coef.clear()
+                        ans.linear_vars, expr.vars = expr.vars, []
+                        self.linearExprPool = (self.linearExprPool, expr)
+                    elif result_type is _GENERAL:
+                        print "TODO: Separate Linear and Nonlinear terms"
+                        if isinstance(expr, SumExpressionBase):
+                            linear_terms = []
+                            linear = self._get_linear()
+                            idMap = {}
+                            zeros = set()
+                            for i,term in enumerate(expr._args_):
+                                term_type = type(term)
+                                if term_type in native_types:
+                                    term_type = _CONSTANT
+                                elif term_type is MonomialTermExpression:
+                                    term_type = _MONOMIAL
+                                elif term_type is LinearExpression:
+                                    term_type = _LINEAR
+                                else:
+                                    continue
+                                if self._update_linear_expr(
+                                        idMap, zeros, linear, term_type, term):
+                                    linear_terms.append(i)
+                            if zeros:
+                                self._finalize_linear(zeros, linear)
+                            ans.constant = linear.constant
+                            ans.linear_vars = tuple(linear.linear_vars)
+                            ans.linear_coefs = tuple(linear.linear_coefs)
+                            for i in reversed(linear_terms):
+                                expr._args_.pop(i)
+                            expr._nargs = len(expr._args_)
+                        ans.nonlinear_expr = expr
+                        ans.nonlinear_vars = list(identify_variables(expr))
+                    elif result_type is _MONOMIAL:
+                        print "FINALIZE monomial"
+                        if result[1]:
+                            ans.linear_coefs = (result[1],)
+                            ans.linear_vars = (result[2],)
+                    elif result_type is _CONSTANT:
+                        ans.constant = result[1]
+                    else:
+                        raise DeveloperError("unknown result type")
+                    return ans
+
+                # Not done yet, update node to point to the new active
+                # node
+                #child = node
+                _, node, args, nargs, data, child_idx = ptr
+
+            ##
+            # Accept Child Result
+            ##
+            if data.__class__ is list:
+                # General expression... cache the child result until the end
+                data.append(node_result)
+            else:
+                # Linear Expression
+                child_type = node_result[0]
+                if child_type is _MONOMIAL:
+                    _id = id(node_result[2])
+                    if _id in data.coef:
+                        data.coef[_id] += node_result[1]
+                    else:
+                        data.coef[_id] = node_result[1]
+                        data.vars.append(node_result[2])
+                elif child_type is _CONSTANT:
+                    data.const += node_result[1]
+                elif child_type is _LINEAR:
+                    child = node_result[1]
+                    data.merge(child)
+                    self.linearExprPool = (self.linearExprPool, child)
+                elif child_type is _GENERAL:
+                    if data.const or data.vars:
+                        if not data.vars:
+                            const, data.const = data.const, 0
+                            self.linearExprPool = (self.linearExprPool, data)
+                            return [(_CONSTANT, const), node_result]
+                        data = [(_LINEAR, data), node_result]
+                    else:
+                        data = [node_result]
+            ##
+            # After Child
+            ##
+
+
+
+    @profile
+    def _get_linear(self):
+        #if self.linearExprPool:
+        try:
+            self.linearExprPool, ans = self.linearExprPool
+            return ans
+        #else:
+        except:
+            return _linearRepn()
+
+
+GeneralStandardExpressionVisitor = GeneralStandardExpressionVisitor_inlined \
+    if INLINE else GeneralStandardExpressionVisitor_streambased
 
 class QuadraticStandardExpressionVisitor(GeneralStandardExpressionVisitor):
     pass
