@@ -409,7 +409,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
         else:
             data = []
         #
-        nargs = len(args)
+        nargs = expr.nargs()
         node = expr
         child_idx = 0
         ptr = (None, node, args, nargs, data, child_idx)
@@ -466,7 +466,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     else:
                         data = []
                     #
-                    nargs = len(args)
+                    nargs = child.nargs()
                     node = child
                     child_idx = 0
                     ptr = (ptr, node, args, nargs, data, child_idx)
