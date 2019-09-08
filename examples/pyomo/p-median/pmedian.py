@@ -2,8 +2,8 @@
 #
 #  Pyomo: Python Optimization Modeling Objects
 #  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
-#  Under the terms of Contract DE-NA0003525 with National Technology and 
-#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain 
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
 #  rights in this software.
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
@@ -53,8 +53,18 @@ def pyomo_create_model(options=None, model_options=None):
     return model
 
 if __name__ == '__main__':
+    import sys
     from pyomo.environ import *
     from pyomo.opt import WriterFactory
+    import pyomo.repn.standard_repn as sr
+    import pyomo.repn.new_standard_repn as nsr
+    sr.OLD = False if len(sys.argv) < 2 else bool(sys.argv[1])
+    nsr.INLINE = True if len(sys.argv) < 3 else bool(sys.argv[2])
+    N = 7 if len(sys.argv) < 4 else int(sys.argv[2])
+    pyomo.common.timing.report_timing()
     m = pyomo_create_model()
-    i = m.create_instance('pmedian.test7.dat')
-    WriterFactory('lp')(i, 'pmedian.test7.lp', lambda x: True, {})
+    i = m.create_instance('pmedian.test%s.dat' % N)
+    from pyutilib.misc.timing import TicTocTimer
+    timer = TicTocTimer()
+    WriterFactory('lp')(i, 'pmedian.test%s.lp' % N, lambda x: True, {})
+    timer.toc("total write time", delta=False)
