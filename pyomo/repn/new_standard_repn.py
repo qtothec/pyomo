@@ -1,7 +1,6 @@
 from __future__ import division
 
-from pyomo.repn.standard_repn import StandardRepn
-
+from pyomo.common.errors import DeveloperError
 from pyomo.core.expr import (
     native_types, value,
 )
@@ -18,12 +17,15 @@ try:
 except ImportError:
     class DivisionExpression(object): pass
 
+from pyomo.repn.standard_repn import StandardRepn
+
+
 _CONSTANT = 0
 _MONOMIAL = 2
 _LINEAR = 4
 _GENERAL = 8
 
-if 'profile' not in __builtins__:
+if not hasattr(__builtins__, 'profile'):
     def profile(x):
         return x
 
@@ -70,13 +72,13 @@ class _linearRepn(object):
         return ans
 
     def fromLinearExpr(self, linear):
-        self.const += child.constant
-        for i,coef in enumerate(child.linear_coefs):
+        self.const += linear.constant
+        for i,coef in enumerate(linear.linear_coefs):
             if not coef:
                 continue
-            v = child.linear_vars[i]
+            v = linear.linear_vars[i]
             _id = id(v)
-            if _if in linear.coef:
+            if _id in linear.coef:
                 linear.coef[_id] += coef
             else:
                 linear.coef[_id] = coef
@@ -267,32 +269,7 @@ class GeneralStandardExpressionVisitor_streambased(
             self.linearExprPool = (self.linearExprPool, expr)
         elif result_type is _GENERAL:
             print("TODO: Separate Linear and Nonlinear terms")
-            if isinstance(expr, SumExpressionBase):
-                linear_terms = []
-                linear = self._get_linear()
-                idMap = {}
-                zeros = set()
-                for i,term in enumerate(expr._args_):
-                    term_type = type(term)
-                    if term_type in native_types:
-                        term_type = _CONSTANT
-                    elif term_type is MonomialTermExpression:
-                        term_type = _MONOMIAL
-                    elif term_type is LinearExpression:
-                        term_type = _LINEAR
-                    else:
-                        continue
-                    if self._update_linear_expr(
-                            idMap, zeros, linear, term_type, term):
-                        linear_terms.append(i)
-                if zeros:
-                    self._finalize_linear(zeros, linear)
-                ans.constant = linear.constant
-                ans.linear_vars = tuple(linear.linear_vars)
-                ans.linear_coefs = tuple(linear.linear_coefs)
-                for i in reversed(linear_terms):
-                    expr._args_.pop(i)
-                expr._nargs = len(expr._args_)
+            expr = result[1]
             ans.nonlinear_expr = expr
             ans.nonlinear_vars = list(identify_variables(expr))
         elif result_type is _MONOMIAL:
@@ -533,9 +510,10 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     ##
                     # Finalize Result
                     ##
-                    result_type, expr = node_result
+                    result_type = node_result[0]
                     ans = StandardRepn()
                     if result_type is _LINEAR:
+                        expr = node_result[1]
                         ans.constant, expr.const = expr.const, 0
                         ans.linear_coefs = list(expr.coef[id(v)] for v in expr.vars)
                         if REMOVE_ZERO_COEF:
@@ -552,41 +530,16 @@ class GeneralStandardExpressionVisitor_inlined(object):
                         self.linearExprPool = (self.linearExprPool, expr)
                     elif result_type is _GENERAL:
                         print("TODO: Separate Linear and Nonlinear terms")
-                        if isinstance(expr, SumExpressionBase):
-                            linear_terms = []
-                            linear = self._get_linear()
-                            idMap = {}
-                            zeros = set()
-                            for i,term in enumerate(expr._args_):
-                                term_type = type(term)
-                                if term_type in native_types:
-                                    term_type = _CONSTANT
-                                elif term_type is MonomialTermExpression:
-                                    term_type = _MONOMIAL
-                                elif term_type is LinearExpression:
-                                    term_type = _LINEAR
-                                else:
-                                    continue
-                                if self._update_linear_expr(
-                                        idMap, zeros, linear, term_type, term):
-                                    linear_terms.append(i)
-                            if zeros:
-                                self._finalize_linear(zeros, linear)
-                            ans.constant = linear.constant
-                            ans.linear_vars = tuple(linear.linear_vars)
-                            ans.linear_coefs = tuple(linear.linear_coefs)
-                            for i in reversed(linear_terms):
-                                expr._args_.pop(i)
-                            expr._nargs = len(expr._args_)
+                        expr = node_result[1]
                         ans.nonlinear_expr = expr
                         ans.nonlinear_vars = list(identify_variables(expr))
                     elif result_type is _MONOMIAL:
                         print("FINALIZE monomial")
-                        if result[1]:
-                            ans.linear_coefs = (result[1],)
-                            ans.linear_vars = (result[2],)
+                        if node_result[1]:
+                            ans.linear_coefs = (node_result[1],)
+                            ans.linear_vars = (node_result[2],)
                     elif result_type is _CONSTANT:
-                        ans.constant = result[1]
+                        ans.constant = node_result[1]
                     else:
                         raise DeveloperError("unknown result type")
                     return ans
