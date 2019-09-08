@@ -92,9 +92,9 @@ class GeneralStandardExpressionVisitor_streambased(
     @profile
     def initializeWalker(self, expr):
         walk, result = self.beforeChild(None, expr)
-        if walk:
-            result = expr
-        return walk, result
+        if not walk:
+            return False, self.finalizeResult(result)
+        return True, None
 
     @profile
     def beforeChild(self, node, child):

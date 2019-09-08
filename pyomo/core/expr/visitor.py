@@ -115,14 +115,13 @@ class StreamBasedExpressionVisitor(object):
         child node are passed, and nothing is returned.  If afterChild
         is not specified, no action takes place.
 
-    walk, expr = initializeWalker(self, expr):
+    walk, result = initializeWalker(self, expr):
 
         initializeWalker() is called to set the walker up and perform
         any preliminary processing on the root node.  The method returns
-        a flag indicating if the tree should be walked and the (possibly
-        modified) root node of the expression.  If walk is False, then
-        the returned expr is passed to finalizeResult() (if defined) or
-        returned.
+        a flag indicating if the tree should be walked and a result.  If
+        `walk` is True, then result is ignored.  If `walk` is False,
+        then `result` is returned as the final result from the walker.
 
     finalizeResult(self, result):
 
@@ -178,12 +177,9 @@ class StreamBasedExpressionVisitor(object):
         # parent pointer.
         #
         if self.initializeWalker is not None:
-            walk, expr = self.initializeWalker(expr)
+            walk, result = self.initializeWalker(expr)
             if not walk:
-                if self.finalizeResult is not None:
-                    return self.finalizeResult(expr)
-                else:
-                    return expr
+                return result
 
         if self.enterNode is not None:
             tmp = self.enterNode(expr)
@@ -318,9 +314,9 @@ class StreamBasedExpressionVisitor_allCallbacks(StreamBasedExpressionVisitor):
         # (ptr).  The beginning of the list is indicated by a None
         # parent pointer.
         #
-        walk, expr = self.initializeWalker(expr)
+        walk, result = self.initializeWalker(expr)
         if not walk:
-            return self.finalizeResult(expr)
+            return result
 
         args, data = self.enterNode(expr)
 
