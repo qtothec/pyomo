@@ -34,6 +34,7 @@ INLINE = True
 
 class _linearRepn(object):
     __slots__ = ('coef','vars','const')
+    _pool = None
 
     def __init__(self):
         self.coef = {}
@@ -53,6 +54,7 @@ class _linearRepn(object):
         other.const = 0
         other.coef.clear()
         other.vars = []
+        _linearRepn._pool = (_linearRepn._pool, other)
 
     def toLinearExpr(self):
         ans = LinearExpression()
@@ -83,6 +85,14 @@ class _linearRepn(object):
             else:
                 linear.coef[_id] = coef
                 linear.vars.append(v)
+
+@profile
+def _get_linear():
+    if _linearRepn._pool is not None:
+        _linearRepn._pool, ans = _linearRepn._pool
+        return ans
+    else:
+        return _linearRepn()
 
 
 class GeneralStandardExpressionVisitor_streambased(
@@ -127,7 +137,7 @@ class GeneralStandardExpressionVisitor_streambased(
             # Because we are going to modify the LinearExpression in this
             # walker, we need to make a copy of the LinearExpression from
             # the original expression tree.
-            linear = self._get_linear()
+            linear = _get_linear()
             linear.fromLinearExpr(child)
             return False, (_LINEAR, linear)
 
@@ -156,7 +166,7 @@ class GeneralStandardExpressionVisitor_streambased(
     @profile
     def enterNode(self, node):
         if isinstance(node, SumExpressionBase):
-            return node._args_, self._get_linear()
+            return node._args_, _get_linear()
         else:
             return node._args_, []
 
@@ -178,14 +188,12 @@ class GeneralStandardExpressionVisitor_streambased(
             elif child_type is _CONSTANT:
                 data.const += child_result[1]
             elif child_type is _LINEAR:
-                child = child_result[1]
-                data.merge(child)
-                self.linearExprPool = (self.linearExprPool, child)
+                data.merge(child_result[1])
             elif child_type is _GENERAL:
                 if data.const or data.vars:
                     if not data.vars:
                         const, data.const = data.const, 0
-                        self.linearExprPool = (self.linearExprPool, data)
+                        _linearRepn._pool = (_linearRepn._pool, data)
                         return [(_CONSTANT, const), child_result]
                     return [(_LINEAR, data), child_result]
                 else:
@@ -266,7 +274,7 @@ class GeneralStandardExpressionVisitor_streambased(
                     pass
             expr.coef.clear()
             ans.linear_vars, expr.vars = expr.vars, []
-            self.linearExprPool = (self.linearExprPool, expr)
+            _linearRepn._pool = (_linearRepn._pool, expr)
         elif result_type is _GENERAL:
             print("TODO: Separate Linear and Nonlinear terms")
             expr = result[1]
@@ -284,13 +292,6 @@ class GeneralStandardExpressionVisitor_streambased(
 
         return ans
 
-    @profile
-    def _get_linear(self):
-        if self.linearExprPool:
-            self.linearExprPool, ans = self.linearExprPool
-            return ans
-        else:
-            return _linearRepn()
 
     @profile
     def _finalize_linear(zeros, linear):
@@ -337,7 +338,7 @@ class GeneralStandardExpressionVisitor_streambased(
             child.constant = 0
             child.linear_vars = []
             child.linear_coefs = []
-            self.linearExprPool = (self.linearExprPool, child)
+            _linearRepn._pool = (_linearRepn._pool, child)
         else:
             # Nonlinear expression
             return False
@@ -382,7 +383,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
         ##
         args = expr._args_
         if isinstance(expr, SumExpressionBase):
-            data = self._get_linear()
+            data = _get_linear()
         else:
             data = []
         #
@@ -425,7 +426,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     # LinearExpression in this walker, we need to make a
                     # copy of the LinearExpression from the original
                     # expression tree.
-                    linear = self._get_linear()
+                    linear = _get_linear()
                     linear.fromLinearExpr(child)
                     node_result = (_LINEAR, linear)
                 else:
@@ -438,7 +439,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     ##
                     args = child._args_
                     if isinstance(child, SumExpressionBase):
-                        data = self._get_linear()
+                        data = _get_linear()
                     else:
                         data = []
                     #
@@ -527,7 +528,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                                 pass
                         expr.coef.clear()
                         ans.linear_vars, expr.vars = expr.vars, []
-                        self.linearExprPool = (self.linearExprPool, expr)
+                        _linearRepn._pool = (_linearRepn._pool, expr)
                     elif result_type is _GENERAL:
                         print("TODO: Separate Linear and Nonlinear terms")
                         expr = node_result[1]
@@ -568,14 +569,12 @@ class GeneralStandardExpressionVisitor_inlined(object):
                 elif child_type is _CONSTANT:
                     data.const += node_result[1]
                 elif child_type is _LINEAR:
-                    child = node_result[1]
-                    data.merge(child)
-                    self.linearExprPool = (self.linearExprPool, child)
+                    data.merge(child_result[1])
                 elif child_type is _GENERAL:
                     if data.const or data.vars:
                         if not data.vars:
                             const, data.const = data.const, 0
-                            self.linearExprPool = (self.linearExprPool, data)
+                            _linearRepn._pool = (_linearRepn._pool, other)
                             return [(_CONSTANT, const), node_result]
                         data = [(_LINEAR, data), node_result]
                     else:
@@ -584,17 +583,6 @@ class GeneralStandardExpressionVisitor_inlined(object):
             # After Child
             ##
 
-
-
-    @profile
-    def _get_linear(self):
-        #if self.linearExprPool:
-        try:
-            self.linearExprPool, ans = self.linearExprPool
-            return ans
-        #else:
-        except:
-            return _linearRepn()
 
 
 GeneralStandardExpressionVisitor = GeneralStandardExpressionVisitor_inlined \
