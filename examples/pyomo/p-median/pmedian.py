@@ -58,8 +58,8 @@ if __name__ == '__main__':
     from pyomo.opt import WriterFactory
     import pyomo.repn.standard_repn as sr
     import pyomo.repn.new_standard_repn as nsr
-    sr.OLD = False if len(sys.argv) < 2 else bool(sys.argv[1])
-    nsr.INLINE = True if len(sys.argv) < 3 else bool(sys.argv[2])
+    sr.OLD = False if len(sys.argv) < 2 else bool(int(sys.argv[1]))
+    nsr._set_inline(True if len(sys.argv) < 3 else bool(int(sys.argv[2])))
     N = 7 if len(sys.argv) < 4 else int(sys.argv[2])
     pyomo.common.timing.report_timing()
     m = pyomo_create_model()

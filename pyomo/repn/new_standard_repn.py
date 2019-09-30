@@ -584,9 +584,16 @@ class GeneralStandardExpressionVisitor_inlined(object):
             ##
 
 
-
-GeneralStandardExpressionVisitor = GeneralStandardExpressionVisitor_inlined \
-    if INLINE else GeneralStandardExpressionVisitor_streambased
+def _set_inline(val=None):
+    if val is None:
+        val = INLINE
+    global GeneralStandardExpressionVisitor
+    if val:
+        GeneralStandardExpressionVisitor \
+            = GeneralStandardExpressionVisitor_inlined
+    else:
+        GeneralStandardExpressionVisitor \
+            = GeneralStandardExpressionVisitor_streambased
 
 class QuadraticStandardExpressionVisitor(GeneralStandardExpressionVisitor):
     pass
