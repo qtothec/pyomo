@@ -10,7 +10,8 @@
 
 
 from pyomo.common.config import ConfigBlock
-from pyomo.common.error import DeveloperError
+from pyomo.common.errors import DeveloperError
+from pyomo.common.deprecation import deprecated
 
 class OptSolver(object):
     """A generic optimization solver"""
@@ -20,8 +21,8 @@ class OptSolver(object):
     MAPPED_OPTIONS = ConfigBlock()
 
     def __init__(self, **kwds):
-        self.config = CONFIG()
-        self.mapped_options = MAPPED_OPTIONS()
+        self.config = OptSolver.CONFIG()
+        self.mapped_options = OptSolver.MAPPED_OPTIONS()
         self.options = ConfigBlock(implicit=True)
 
     def available(self):
@@ -47,7 +48,7 @@ class OptSolver(object):
             "Derived OptSolver class %s failed to implement solve()"
             % (self.__class__.__name__,))
 
-    @deprecated("Casting a solver to bool() is deprecated.  Use available()"
+    @deprecated("Casting a solver to bool() is deprecated.  Use available()",
                 version='TBD')
     def __bool__(self):
         return self.available()
