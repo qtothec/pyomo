@@ -21,8 +21,8 @@ class OptSolver(object):
     MAPPED_OPTIONS = ConfigBlock()
 
     def __init__(self, **kwds):
-        self.config = OptSolver.CONFIG()
-        self.mapped_options = OptSolver.MAPPED_OPTIONS()
+        self.config = self.CONFIG()
+        self.mapped_options = self.MAPPED_OPTIONS()
         self.options = ConfigBlock(implicit=True)
 
     def available(self):
