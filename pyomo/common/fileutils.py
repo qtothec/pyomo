@@ -590,6 +590,12 @@ class PathManager(object):
         self.pathlist = None
 
     def __call__(self, path):
+        if isinstance(path, self._dataClass):
+            if path._registered_name in self._pathTo:
+                return self._pathTo[path._registered_name]
+            else:
+                self._pathTo[path._registered_name] = path
+                return path
         if path not in self._pathTo:
             self._pathTo[path] = self._dataClass(self, path)
         return self._pathTo[path]
