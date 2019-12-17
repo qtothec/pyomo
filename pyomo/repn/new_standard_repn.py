@@ -595,5 +595,7 @@ def _set_inline(val=None):
         GeneralStandardExpressionVisitor \
             = GeneralStandardExpressionVisitor_streambased
 
+_set_inline()
+
 class QuadraticStandardExpressionVisitor(GeneralStandardExpressionVisitor):
     pass
