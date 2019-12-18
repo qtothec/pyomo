@@ -14,9 +14,9 @@ third party packages are available!
 """
 import sys
 try:
-    import ujson as json
+    import cPickle as pickle
 except ImportError:
-    import json
+    import pickle
 
 from gurobipy import *
 
@@ -24,6 +24,7 @@ if sys.version_info[0] < 3:
     from itertools import izip as zip
 
 GUROBI_VERSION = gurobi.version()
+NUM_SOLNS = 1
 
 # NOTE: this function / module is independent of Pyomo, and only relies
 #       on the GUROBI python bindings. consequently, nothing in this
@@ -245,7 +246,7 @@ def gurobi_run(model_file, pyomo_options, options, suffixes):
     problem['number_of_objectives'] = n_objs
 
     vars = model.getVars()
-    cons = model.getConstraints()
+    cons = model.getConstrs()
     qcons = model.getQConstrs() if GUROBI_VERSION[0] >= 5 else []
 
     problem['number_of_constraints'] = len(cons) + len(qcons) + model.NumSOS
@@ -267,16 +268,17 @@ def gurobi_run(model_file, pyomo_options, options, suffixes):
     solution = results['solution'] = {}
     solution['status'] = solution_status
     solution['message'] = message
-    solutions = solution['solutions'] = []
+    solutions = solution['points'] = []
     
     is_discrete = model.getAttr(GRB.Attr.IsMIP)
-    for solID in xrange(min(model.getAttr(GRB.Attr.SolCount, NUM_SOLNS))):
+    for solID in xrange(min(model.getAttr(GRB.Attr.SolCount), NUM_SOLNS)):
         model.setParam('SolutionNumber', solID)
         _sol = {
-            'gap': model.getAttr("MIPGap"),
             'X': model.getAttr("X", vars),
             'VarName': model.getAttr("VarName", vars),
         }
+        if is_discrete:
+            _sol['gap'] = model.getAttr("MIPGap")
         if extract_slacks or extract_duals or extract_reduced_costs:
             _sol['ConstrName'] = model.getAttr("ConstrName", cons)
             if GUROBI_VERSION[0] >= 5:
@@ -299,8 +301,8 @@ def gurobi_run(model_file, pyomo_options, options, suffixes):
 
 if __name__ == '__main__':
     model_file, soln_file, pyomo_options, options, suffixes = \
-        json.loads(sys.stdin)
+        pickle.load(sys.stdin)
     results = gurobi_run(model_file, pyomo_options, options, suffixes)
-    with open(soln_file, 'w') as SOLN:
-        json.dump(SOLN, results)
+    with open(soln_file, 'wb') as SOLN:
+        pickle.dump(results, SOLN)
     

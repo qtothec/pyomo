@@ -13,6 +13,8 @@ from pyomo.common.config import ConfigBlock, ConfigValue, NonNegativeFloat
 from pyomo.common.errors import DeveloperError
 from pyomo.common.deprecation import deprecated
 
+from pyomo.opt.results import SolverResults
+
 class Solver(object):
     """A generic optimization solver"""
 
@@ -57,7 +59,7 @@ class Solver(object):
             "Derived Solver class %s failed to implement version()"
             % (self.__class__.__name__,))
 
-    def solve(self, model, options=None, mapped_options=None, **config_options):
+    def solve(self, model, options=None, **config_options):
         raise DeveloperError(
             "Derived Solver class %s failed to implement solve()"
             % (self.__class__.__name__,))
