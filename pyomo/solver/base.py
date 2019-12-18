@@ -9,9 +9,10 @@
 #  ___________________________________________________________________________
 
 
-from pyomo.common.config import ConfigBlock
+from pyomo.common.config import ConfigBlock, ConfigValue
 from pyomo.common.errors import DeveloperError
 from pyomo.common.deprecation import deprecated
+from pyomo.core.base.set import NonNegativeReals
 
 class Solver(object):
     """A generic optimization solver"""
