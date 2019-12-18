@@ -11,9 +11,9 @@
 import os
 import sys
 try:
-    import ujson as json
+    import cPickle as pickle
 except ImportError:
-    import json
+    import pickle
 
 from pyutilib.common import ApplicationError, WindowsError
 from pyutilib.services import TempfileManager
@@ -23,7 +23,7 @@ from pyomo.common.config import (
     ConfigBlock, ConfigList, ConfigValue, add_docstring_list, In, Path,
 )
 from pyomo.common.fileutils import Executable, this_file_dir
-from pyomo.solver.base import MIPSolver
+from pyomo.solver.base import MIPSolver, SolverResults
 from pyomo.writer.cpxlp import ProblemWriter_cpxlp
 
 class GurobiSolver(MIPSolver):
@@ -50,6 +50,7 @@ class GurobiSolver(MIPSolver):
         else:
             raise ValueError("Invalid solver_io for GurobiSolver: %s"
                              % (solver_io,))
+
 
 class GurobiSolver_LP(GurobiSolver):
     CONFIG = GurobiSolver.CONFIG()
@@ -156,12 +157,12 @@ class GurobiSolver_LP(GurobiSolver):
         suffixes = []
 
         # Run Gurobi
-        data = json.dumps(
+        data = pickle.dumps(
             ( config.problemfile,
               config.solnfile,
               { 'warmstart_file': config.warmstart_file,
                 'relax_integrality': config.relax_integrality, },
-              options,
+              options.value(),
               suffixes))
         timelim = config.timelimit
         if timelim:
@@ -178,14 +179,14 @@ class GurobiSolver_LP(GurobiSolver):
 
         # Read in the results
         result_data = None
-        with open(config.solnfile, 'r') as SOLN:
+        with open(config.solnfile, 'rb') as SOLN:
             try:
-                result_data = json.load(SOLN)
+                result_data = pickle.load(SOLN)
             except ValueError:
                 logger.error(
-                    """GurobiSolver_LP: no results data returned from the
-                    Gurobi subprocess.  Look at the solver log for more
-                    details (re-run with 'tee=True' to see the solver log.""")
+                    "GurobiSolver_LP: no results data returned from the "
+                    "Gurobi subprocess.  Look at the solver log for more "
+                    "details (re-run with 'tee=True' to see the solver log.")
                 raise
 
         results = SolverResults()
@@ -195,10 +196,10 @@ class GurobiSolver_LP(GurobiSolver):
 
         if not config.load_solution:
             raise RuntimeError("TODO")
-        elif result_data['solution']:
-            _sol = result_data['solution'][0]
+        elif result_data['solution']['points']:
+            _sol = result_data['solution']['points'][0]
             X = _sol['X']
-            for i, vname in _sol['VarName']:
+            for i, vname in enumerate(_sol['VarName']):
                 v = symbol_map.getObject(vname)
                 v.value = X[i]
 
@@ -207,13 +208,12 @@ class GurobiSolver_LP(GurobiSolver):
 
 if __name__ == '__main__':
     solver = GurobiSolver_LP()
-    print solver.config.problemfile
     from pyomo.environ import *
     m = ConcreteModel()
     m.x = Var(bounds=(0,10))
     m.y = Var(bounds=(0,5))
     m.con1 = Constraint(expr=2*m.x+m.y <= 5)
-    m.con2 = Constraint(expr=m.x+m.y <= 6)
+    m.con2 = Constraint(expr=m.x+2*m.y <= 6)
     m.obj = Objective(expr=m.x+m.y, sense=maximize)
 
     print solver.solve(m, tee=True)
