@@ -64,6 +64,13 @@ def _get_objective(block):
     return obj
 
 
+class _MutableHelper(object):
+    def __init__(self):
+        self.mutable_constant = 0
+        self.mutable_linear_coefficients = list()
+        self.mutable_quadratic_coefficients = list()
+
+
 class _GurobiWalker(StreamBasedExpressionVisitor):
     def __init__(self, var_map):
         """
@@ -72,6 +79,8 @@ class _GurobiWalker(StreamBasedExpressionVisitor):
         var_map: dict
             maps ids of pyomo vars to gurobi vars
         """
+        import gurobipy
+        self._gurobipy = gurobipy
         super(_GurobiWalker, self).__init__()
         self.var_map = var_map
         self.referenced_vars = ComponentSet()
@@ -88,6 +97,10 @@ class _GurobiWalker(StreamBasedExpressionVisitor):
         child_type = child.__class__
         if child_type in native_types:
             return False, value(child)
+        if child_type is numeric_expr.LinearExpression:
+            return (False, (self._gurobipy.LinExpr(child.linear_coefs,
+                                                   [self.var_map[i] for i in child.linear_vars]) +
+                            child.constant))
         if child.is_expression_type():
             return True, None
         if child.is_constant():
