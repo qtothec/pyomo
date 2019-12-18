@@ -88,6 +88,10 @@ class _GurobiWalker(StreamBasedExpressionVisitor):
         child_type = child.__class__
         if child_type in native_types:
             return False, value(child)
+        if child.is_expression_type():
+            return True, None
+        if child.is_constant():
+            return False, value(child)
         if child.is_variable_type():
             self.referenced_vars.add(child)
             return False, self.var_map[id(child)]
