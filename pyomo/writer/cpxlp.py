@@ -200,15 +200,18 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
         # Create labeler
         #
         if config.symbolic_solver_labels:
-            config.labeler = TextLabeler()
-        elif config.labeler is None:
-            config.labeler = NumericLabeler('x')
+            labeler = TextLabeler()
+        elif config.labeler is not None:
+            labeler = config.labeler
+        else:
+            labeler = NumericLabeler('x')
 
         # Clear the collection of referenced variables.
         self._referenced_variable_ids.clear()
 
         if output_filename is None:
             output_filename = model.name + ".lp"
+        print output_filename, type(output_filename)
 
         # when sorting, there are a non-trivial number of
         # temporary objects created. these all yield
@@ -222,14 +225,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                     config,
                     model,
                     output_file,
-                    labeler,
-                    output_fixed_variable_bounds=output_fixed_variable_bounds,
-                    file_determinism=file_determinism,
-                    row_order=row_order,
-                    column_order=column_order,
-                    skip_trivial_constraints=skip_trivial_constraints,
-                    force_objective_constant=force_objective_constant,
-                    include_all_variable_bounds=include_all_variable_bounds)
+                    labeler)
 
         self._referenced_variable_ids.clear()
         import pyomo.repn.standard_repn
@@ -243,8 +239,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                               object_symbol_dictionary,
                               variable_symbol_dictionary,
                               is_objective,
-                              column_order,
-                              force_objective_constant=False):
+                              config):
 
         """
         Return a expression as a string in LP format.
@@ -256,7 +251,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
         required arguments:
           x: A Pyomo canonical expression to write in LP format
         """
-        assert (not force_objective_constant) or (is_objective)
+        assert (not config.force_objective_constant) or (is_objective)
         linear_coef_string_template = self.linear_coef_string_template
         quad_coef_string_template = self.quad_coef_string_template
 
@@ -269,7 +264,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
             for vardata in x.linear_vars:
                 self._referenced_variable_ids[id(vardata)] = vardata
 
-            if column_order is None:
+            if config.column_order is None:
                 #
                 # Order columns by dictionary names
                 #
@@ -281,7 +276,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                 #
                 # Order columns by the value of column_order[]
                 #
-                for i, var in sorted(enumerate(x.linear_vars), key=lambda x: column_order[x[1]]):
+                for i, var in sorted(enumerate(x.linear_vars), key=lambda x: config.column_order[x[1]]):
                     name = variable_symbol_dictionary[id(var)]
                     output.append(linear_coef_string_template % (x.linear_coefs[i], name))
         #
@@ -295,7 +290,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
 
             output.append("+ [\n")
 
-            if column_order is None:
+            if config.column_order is None:
                 #
                 # Order columns by dictionary names
                 #
@@ -337,8 +332,8 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                 cols = []
                 i = 0
                 for var1, var2 in x.quadratic_vars:
-                    col1 = column_order[var1]
-                    col2 = column_order[var2]
+                    col1 = config.column_order[var1]
+                    col2 = config.column_order[var2]
                     if col1 < col2:
                         cols.append( (((col1,col2) , variable_symbol_dictionary[id(var1)], variable_symbol_dictionary[id(var2)])) )
                     elif col1 > col2:
@@ -387,7 +382,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
         # Currently, it appears that we only need to print
         # the constant offset term for objectives.
         #
-        if is_objective and (force_objective_constant or (x.constant != 0.0)):
+        if is_objective and (config.force_objective_constant or (x.constant != 0.0)):
             output.append(self.obj_string_template % (x.constant, 'ONE_VAR_CONSTANT'))
 
         #
@@ -440,14 +435,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                         config,
                         model,
                         output_file,
-                        labeler,
-                        output_fixed_variable_bounds=False,
-                        file_determinism=1,
-                        row_order=None,
-                        column_order=None,
-                        skip_trivial_constraints=False,
-                        force_objective_constant=False,
-                        include_all_variable_bounds=False):
+                        labeler):
 
         eq_string_template = self.eq_string_template
         leq_string_template = self.leq_string_template
@@ -474,9 +462,9 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
         #                                variable_symbol_map,
         #                                file_determinism=file_determinism)
         sortOrder = SortComponents.unsorted
-        if file_determinism >= 1:
+        if config.file_determinism >= 1:
             sortOrder = sortOrder | SortComponents.indices
-            if file_determinism >= 2:
+            if config.file_determinism >= 2:
                 sortOrder = sortOrder | SortComponents.alphabetical
 
         #
@@ -581,7 +569,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                 if degree == 0:
                     logger.warning("Constant objective detected, replacing "
                           "with a placeholder to prevent solver failure.")
-                    force_objective_constant = True
+                    config.force_objective_constant = True
                 elif degree == 2:
                     if not supports_quadratic_objective:
                         raise RuntimeError(
@@ -604,8 +592,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                     object_symbol_dictionary,
                     variable_symbol_dictionary,
                     True,
-                    column_order,
-                    force_objective_constant=force_objective_constant)
+                    config)
 
         if numObj == 0:
             raise ValueError(
@@ -626,7 +613,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
 
         have_nontrivial = False
 
-        supports_quadratic_constraint = config.allow_quadratic_constraint
+        supports_quadratic_constraint = config.allow_quadratic_constraints
 
         def constraint_generator():
             for block in all_blocks:
@@ -659,9 +646,9 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
 
                     yield constraint_data, repn
 
-        if row_order is not None:
+        if config.row_order is not None:
             sorted_constraint_list = list(constraint_generator())
-            sorted_constraint_list.sort(key=lambda x: row_order[x[0]])
+            sorted_constraint_list.sort(key=lambda x: config.row_order[x[0]])
             def yield_all_constraints():
                 for data, repn in sorted_constraint_list:
                     yield data, repn
@@ -685,7 +672,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
             # possible that the body of the constraint consists of only a
             # constant, in which case the "variable" of
             if degree == 0:
-                if skip_trivial_constraints:
+                if config.skip_trivial_constraints:
                     continue
             elif degree == 2:
                 if not supports_quadratic_constraint:
@@ -712,7 +699,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                                               object_symbol_dictionary,
                                               variable_symbol_dictionary,
                                               False,
-                                              column_order)
+                                              config)
                 bound = constraint_data.lower
                 bound = _get_bound(bound) - offset
                 output.append(eq_string_template
@@ -732,7 +719,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                                                   object_symbol_dictionary,
                                                   variable_symbol_dictionary,
                                                   False,
-                                                  column_order)
+                                                  config)
                     bound = constraint_data.lower
                     bound = _get_bound(bound) - offset
                     output.append(geq_string_template
@@ -753,7 +740,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                                                   object_symbol_dictionary,
                                                   variable_symbol_dictionary,
                                                   False,
-                                                  column_order)
+                                                  config)
                     bound = constraint_data.upper
                     bound = _get_bound(bound) - offset
                     output.append(leq_string_template
@@ -848,7 +835,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
             #       a dictionary that is hashed by id(vardata)
             #       which would make the bounds section
             #       nondeterministic (bad for unit testing)
-            if (not include_all_variable_bounds) and \
+            if (not config.include_all_variable_bounds) and \
                (id(vardata) not in self._referenced_variable_ids):
                 continue
 
@@ -871,7 +858,7 @@ class ProblemWriter_cpxlp(AbstractProblemWriter):
                                 % (vardata.name))
 
             if vardata.fixed:
-                if not output_fixed_variable_bounds:
+                if not config.output_fixed_variable_bounds:
                     raise ValueError(
                         "Encountered a fixed variable (%s) inside an active "
                         "objective or constraint expression on model %s, which is "

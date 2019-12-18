@@ -9,21 +9,34 @@
 #  ___________________________________________________________________________
 
 
-from pyomo.common.config import ConfigBlock, ConfigValue
+from pyomo.common.config import ConfigBlock, ConfigValue, NonNegativeFloat
 from pyomo.common.errors import DeveloperError
 from pyomo.common.deprecation import deprecated
-from pyomo.core.base.set import NonNegativeReals
 
 class Solver(object):
     """A generic optimization solver"""
 
     CONFIG = ConfigBlock()
+    CONFIG.declare('timelimit', ConfigValue(
+        default=None,
+        domain=NonNegativeFloat,
+    ))
+    CONFIG.declare('keepfiles', ConfigValue(
+        default=False,
+        domain=bool,
+    ))
+    CONFIG.declare('tee', ConfigValue(
+        default=False,
+        domain=bool,
+    ))
+    CONFIG.declare('load_solution', ConfigValue(
+        default=True,
+        domain=bool,
+    ))
 
-    MAPPED_OPTIONS = ConfigBlock()
 
     def __init__(self, **kwds):
         self.config = self.CONFIG()
-        self.mapped_options = self.MAPPED_OPTIONS()
         self.options = ConfigBlock(implicit=True)
 
     def available(self):
@@ -56,12 +69,12 @@ class Solver(object):
 
 
 class MIPSolver(Solver):
-    MAPPED_OPTIONS = Solver.MAPPED_OPTIONS()
-    MAPPED_OPTIONS.declare('mipgap', ConfigValue(
+    CONFIG = Solver.CONFIG()
+    CONFIG.declare('mipgap', ConfigValue(
         default=None,
-        domain=NonNegativeReals,
+        domain=NonNegativeFloat,
     ))
-    MAPPED_OPTIONS.declare('relax_integrality', ConfigValue(
+    CONFIG.declare('relax_integrality', ConfigValue(
         default=False,
         domain=bool,
     ))
