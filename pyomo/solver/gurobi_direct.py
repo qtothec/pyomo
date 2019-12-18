@@ -33,7 +33,7 @@ from pyomo.core.base.constraint import Constraint
 from pyomo.core.base.sos import SOSConstraint
 from pyomo.core.base.objective import Objective
 from pyomo.common.config import ConfigBlock, ConfigValue, add_docstring_list
-from pyomo.solver.base import OptSolver
+from pyomo.solver.base import MIPSolver, Solver
 from pyomo.core.base import SymbolMap, NumericLabeler, TextLabeler
 from pyomo.core.expr.visitor import StreamBasedExpressionVisitor
 from pyomo.core.expr.numvalue import native_numeric_types, native_types
@@ -64,6 +64,13 @@ def _get_objective(block):
     return obj
 
 
+class _MutableHelper(object):
+    def __init__(self):
+        self.mutable_constant = 0
+        self.mutable_linear_coefficients = list()
+        self.mutable_quadratic_coefficients = list()
+
+
 class _GurobiWalker(StreamBasedExpressionVisitor):
     def __init__(self, var_map):
         """
@@ -72,6 +79,8 @@ class _GurobiWalker(StreamBasedExpressionVisitor):
         var_map: dict
             maps ids of pyomo vars to gurobi vars
         """
+        import gurobipy
+        self._gurobipy = gurobipy
         super(_GurobiWalker, self).__init__()
         self.var_map = var_map
         self.referenced_vars = ComponentSet()
@@ -88,6 +97,10 @@ class _GurobiWalker(StreamBasedExpressionVisitor):
         child_type = child.__class__
         if child_type in native_types:
             return False, value(child)
+        if child_type is numeric_expr.LinearExpression:
+            return (False, (self._gurobipy.LinExpr(child.linear_coefs,
+                                                   [self.var_map[id(i)] for i in child.linear_vars]) +
+                            child.constant))
         if child.is_expression_type():
             return True, None
         if child.is_constant():
@@ -109,12 +122,12 @@ class _GurobiWalker(StreamBasedExpressionVisitor):
 
 
 @SolverFactory.register('new_gurobi_direct', doc='Direct python interface to Gurobi')
-class GurobiDirect(OptSolver):
+class GurobiDirect(MIPSolver):
     """
     Direct interface to Gurobi
     """
-    CONFIG = OptSolver.CONFIG()
-    MAPPED_OPTIONS = OptSolver.MAPPED_OPTIONS()
+    CONFIG = Solver.CONFIG()
+    MAPPED_OPTIONS = MIPSolver.MAPPED_OPTIONS()
 
     CONFIG.declare('symbolic_solver_labels', ConfigValue(default=False, domain=bool,
                                                          doc='If True, the gurobi variable and constraint names '
