@@ -231,7 +231,7 @@ def gurobi_run(model_file, pyomo_options, options, suffixes):
 
     results = {}
     problem = results['problem'] = {}
-    
+
     if model.getAttr(GRB.Attr.ObjBound) < 0:
         problem['sense'] = 'maximize'
         problem['lower_bound'] = obj_value
@@ -269,7 +269,7 @@ def gurobi_run(model_file, pyomo_options, options, suffixes):
     solution['status'] = solution_status
     solution['message'] = message
     solutions = solution['points'] = []
-    
+
     is_discrete = model.getAttr(GRB.Attr.IsMIP)
     for solID in xrange(min(model.getAttr(GRB.Attr.SolCount), NUM_SOLNS)):
         model.setParam('SolutionNumber', solID)
@@ -293,7 +293,7 @@ def gurobi_run(model_file, pyomo_options, options, suffixes):
             _sol['Slack'] = model.getAttr("Slack", cons)
             if GUROBI_VERSION[0] >= 5:
                 _sol['QCSlack'] = model.getAttr("QCSlack", qcons)
-        
+
         solutions.append(_sol)
 
     return results
@@ -304,5 +304,5 @@ if __name__ == '__main__':
         pickle.load(sys.stdin)
     results = gurobi_run(model_file, pyomo_options, options, suffixes)
     with open(soln_file, 'wb') as SOLN:
-        pickle.dump(results, SOLN)
-    
+        pickle.dump(results, SOLN, protocol=2)
+

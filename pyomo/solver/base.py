@@ -2,8 +2,8 @@
 #
 #  Pyomo: Python Optimization Modeling Objects
 #  Copyright 2017 National Technology and Engineering Solutions of Sandia, LLC
-#  Under the terms of Contract DE-NA0003525 with National Technology and 
-#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain 
+#  Under the terms of Contract DE-NA0003525 with National Technology and
+#  Engineering Solutions of Sandia, LLC, the U.S. Government retains certain
 #  rights in this software.
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
@@ -50,7 +50,7 @@ class Solver(object):
         raise DeveloperError(
             "Derived Solver class %s failed to implement license_status()"
             % (self.__class__.__name__,))
-        
+
     def version(self):
         """
         Returns a tuple describing the solver version.
@@ -69,6 +69,19 @@ class Solver(object):
     def __bool__(self):
         return self.available()
 
+    ####################################################################
+    #  The following are "hacks" to support the pyomo command (and
+    #  compatability with existing solvers)
+
+    #
+    # Support "with" statements.
+    #
+    def __enter__(self):
+        return self
+
+    def __exit__(self, t, v, traceback):
+        pass
+
 
 class MIPSolver(Solver):
     CONFIG = Solver.CONFIG()
@@ -80,4 +93,4 @@ class MIPSolver(Solver):
         default=False,
         domain=bool,
     ))
-    
+

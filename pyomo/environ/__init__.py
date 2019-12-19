@@ -38,6 +38,7 @@ _packages = [
     'pyomo.bilevel',
     'pyomo.scripting',
     'pyomo.network',
+    'pyomo.solver',
 ]
 #
 #

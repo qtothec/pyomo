@@ -26,6 +26,9 @@ from pyomo.common.fileutils import Executable, this_file_dir
 from pyomo.solver.base import MIPSolver, SolverResults
 from pyomo.writer.cpxlp import ProblemWriter_cpxlp
 
+from pyomo.opt.base.solvers import SolverFactory
+
+@SolverFactory.register('NEW_gurobi', doc='The GUROBI LP/MIP solver')
 class GurobiSolver(MIPSolver):
     CONFIG = MIPSolver.CONFIG()
 
@@ -50,7 +53,6 @@ class GurobiSolver(MIPSolver):
         else:
             raise ValueError("Invalid solver_io for GurobiSolver: %s"
                              % (solver_io,))
-
 
 class GurobiSolver_LP(GurobiSolver):
     CONFIG = GurobiSolver.CONFIG()
@@ -163,7 +165,7 @@ class GurobiSolver_LP(GurobiSolver):
               { 'warmstart_file': config.warmstart_file,
                 'relax_integrality': config.relax_integrality, },
               options.value(),
-              suffixes))
+              suffixes), protocol=2)
         timelim = config.timelimit
         if timelim:
             timelim + min(max(1, 0.01*self._timelim), 100)
