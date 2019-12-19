@@ -14,6 +14,7 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
+from six import iteritems
 
 from pyutilib.common import ApplicationError, WindowsError
 from pyutilib.services import TempfileManager
@@ -192,8 +193,14 @@ class GurobiSolver_LP(GurobiSolver):
                 raise
 
         results = SolverResults()
-        results.problem.update(result_data['problem'])
-        results.solver.update(result_data['solver'])
+
+        #results.problem.update(result_data['problem'])
+        for k,v in iteritems(result_data['problem']):
+            setattr(results.problem, k, v)
+
+        #results.solver.update(result_data['solver'])
+        for k,v in iteritems(result_data['solver']):
+            setattr(results.solver, k, v)
         results.solver.name = 'gurobi_lp'
 
         if not config.load_solution:
