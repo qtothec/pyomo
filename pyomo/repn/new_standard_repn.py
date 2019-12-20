@@ -59,7 +59,7 @@ class _linearRepn(object):
     def toLinearExpr(self):
         ans = LinearExpression()
         ans.constant, self.const = self.const, 0
-        ans.linear_coefs = list(self.coef[id(v)] for v in self.vars)
+        ans.linear_coefs = [self.coef[id(v)] for v in self.vars]
         ans.linear_vars, self.vars = self.vars, []
         if REMOVE_ZERO_COEF:
             try:
@@ -262,7 +262,7 @@ class GeneralStandardExpressionVisitor_streambased(
         if result_type is _LINEAR:
             expr = result[1]
             ans.constant, expr.const = expr.const, 0
-            ans.linear_coefs = list(expr.coef[id(v)] for v in expr.vars)
+            ans.linear_coefs = [expr.coef[id(v)] for v in expr.vars]
             if REMOVE_ZERO_COEF:
                 try:
                     i = 0
@@ -516,7 +516,7 @@ class GeneralStandardExpressionVisitor_inlined(object):
                     if result_type is _LINEAR:
                         expr = node_result[1]
                         ans.constant, expr.const = expr.const, 0
-                        ans.linear_coefs = list(expr.coef[id(v)] for v in expr.vars)
+                        ans.linear_coefs = [expr.coef[id(v)] for v in expr.vars]
                         if REMOVE_ZERO_COEF:
                             try:
                                 i = 0
