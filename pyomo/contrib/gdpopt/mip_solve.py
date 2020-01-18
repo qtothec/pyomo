@@ -7,7 +7,7 @@ from copy import deepcopy
 from pyomo.common.errors import InfeasibleConstraintException
 from pyomo.contrib.fbbt.fbbt import fbbt
 from pyomo.contrib.gdpopt.data_class import MasterProblemResult
-from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, _DoNothing
+from pyomo.contrib.gdpopt.util import SuppressInfeasibleWarning, _DoNothing, get_main_elapsed_time
 from pyomo.core import (Block, Expression, Objective, TransformationFactory,
                         Var, minimize, value, Constraint)
 from pyomo.gdp import Disjunct
@@ -75,8 +75,14 @@ def solve_linear_GDP(linear_GDP_model, solve_data, config):
 
     try:
         with SuppressInfeasibleWarning():
+            mip_args = dict(config.mip_solver_args)
+            if config.mip_solver == 'gams':
+                elapsed = get_main_elapsed_time(solve_data.timing)
+                remaining = max(config.time_limit - elapsed, 1)
+                mip_args['add_options'] = mip_args.get('add_options', [])
+                mip_args['add_options'].append('option reslim=%s;' % remaining)
             results = SolverFactory(config.mip_solver).solve(
-                m, **config.mip_solver_args)
+                m, **mip_args)
     except RuntimeError as e:
         if 'GAMS encountered an error during solve.' in str(e):
             config.logger.warning("GAMS encountered an error in solve. Treating as infeasible.")

@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """Main driver module for GDPopt solver.
 
+20.1.18 changes:
+- improved subsolver time limit support for GAMS interface
+- add maxTimeLimit exit condition for GDPopt-LBB
 20.1.15 changes:
 - internal cleanup of codebase
 - merge GDPbb capabilities (logic-based branch and bound)
