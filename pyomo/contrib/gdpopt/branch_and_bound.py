@@ -196,6 +196,7 @@ def _branch_on_node(node_data, node_model, solve_data):
         fixed_True_disjunct = child_unfixed_disjuncts[disjunct_index_to_fix_True]
         for constr in child_model.GDPopt_utils.disjunct_to_nonlinear_constraints.get(fixed_True_disjunct, ()):
             constr.activate()
+            child_model.BigM[constr] = 1  # set arbitrary BigM (ok, because we fix corresponding Y=True)
 
         del child_model.GDPopt_utils.disjunction_to_unfixed_disjuncts[child_disjunction_to_branch]
         for child_disjunct in child_unfixed_disjuncts:
