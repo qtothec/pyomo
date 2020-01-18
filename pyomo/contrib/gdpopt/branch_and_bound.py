@@ -2,6 +2,8 @@ import traceback
 from collections import namedtuple
 from heapq import heappush, heappop
 
+from pyomo.common.errors import InfeasibleConstraintException
+from pyomo.contrib.fbbt.fbbt import fbbt
 from pyomo.contrib.gdpopt.util import copy_var_list_values, SuppressInfeasibleWarning
 from pyomo.contrib.satsolver.satsolver import satisfiable
 from pyomo.core import minimize, Suffix, Constraint, ComponentMap, TransformationFactory
@@ -244,6 +246,15 @@ def _solve_rnGDP_subproblem(model, solve_data):
 
     try:
         with SuppressInfeasibleWarning():
+            try:
+                fbbt(subproblem, integer_tol=config.integer_tolerance)
+            except InfeasibleConstraintException:
+                copy_var_list_values(  # copy variable values, even if errored
+                    from_list=subproblem.GDPopt_utils.variable_list,
+                    to_list=model.GDPopt_utils.variable_list,
+                    config=config, ignore_integrality=True
+                )
+                return float('inf'), float('inf')
             result = SolverFactory(config.minlp_solver).solve(subproblem, **config.minlp_solver_args)
     except RuntimeError as e:
         config.logger.warning(
