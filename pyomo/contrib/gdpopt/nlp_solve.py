@@ -238,6 +238,14 @@ def solve_MINLP(model, solve_data, config):
                 'Using potentially suboptimal feasible solution.')
         else:
             subprob_result.feasible = False
+    elif term_cond == tc.maxTimeLimit:
+        config.logger.info('MINLP subproblem failed to converge within time limit.')
+        if is_feasible(model, config):
+            config.logger.info(
+                'MINLP solution is still feasible. '
+                'Using potentially suboptimal feasible solution.')
+        else:
+            subprob_result.feasible = False
     elif term_cond == tc.intermediateNonInteger:
         config.logger.info(
             "MINLP solver could not find feasible integer solution: %s" % results.solver.message)
