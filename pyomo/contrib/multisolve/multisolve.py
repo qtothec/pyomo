@@ -72,9 +72,13 @@ class Multisolve(object):
         solve_data = GDPoptSolveData()
         with create_utility_block(model, 'multisolve_utils', solve_data):
             results = []
-
-            with Pool(processes=2, maxtasksperchild=1) as pool:
+            try:
+                pool = Pool(processes=2, maxtasksperchild=1)
                 for solver, solver_args in zip(config.solvers, config.solver_args):
+                    if solver == 'gams' and config.time_limit < float('inf'):
+                        solver_args = dict(solver_args)
+                        solver_args['add_options'] = solver_args.get('add_options', [])
+                        solver_args['add_options'].append('option reslim=%s;' % config.time_limit)
                     results.append(pool.apply_async(
                         _solve_model, args=(model.clone(), solver, solver_args)))
                 pool.close()
@@ -119,20 +123,21 @@ class Multisolve(object):
                     if solution_found:
                         break
                     elapsed = timeit.default_timer() - start_time
-                    if elapsed >= config.time_limit:
+                    if elapsed >= config.time_limit + 5:
                         break
                     results = [r for r in results if r not in finished_results]
                 del results
+            finally:
                 pool.terminate()
                 time.sleep(0.1)
                 pool.join()
 
-                if not solution_found and final_result is not None:
-                    pass
-                if final_result is None:
-                    final_result = SolverResults()
-                    final_result.solver.termination_condition = tc.maxTimeLimit
-                return final_result
+            if not solution_found and final_result is not None:
+                pass
+            if final_result is None:
+                final_result = SolverResults()
+                final_result.solver.termination_condition = tc.maxTimeLimit
+            return final_result
 
     def __enter__(self):
         return self
