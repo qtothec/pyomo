@@ -42,11 +42,13 @@ def solve_linear_subproblem(mip_model, solve_data, config):
         raise RuntimeError("MIP solver %s is not available." % config.mip_solver)
     with SuppressInfeasibleWarning():
         mip_args = dict(config.mip_solver_args)
+        elapsed = get_main_elapsed_time(solve_data.timing)
+        remaining = max(config.time_limit - elapsed, 1)
         if config.mip_solver == 'gams':
-            elapsed = get_main_elapsed_time(solve_data.timing)
-            remaining = max(config.time_limit - elapsed, 1)
             mip_args['add_options'] = mip_args.get('add_options', [])
             mip_args['add_options'].append('option reslim=%s;' % remaining)
+        elif config.mip_solver == 'multisolve':
+            mip_args['time_limit'] = min(mip_args.get('time_limit', float('inf')), remaining)
         results = mip_solver.solve(mip_model, **mip_args)
 
     subprob_result = SubproblemResult()
@@ -103,11 +105,13 @@ def solve_NLP(nlp_model, solve_data, config):
     with SuppressInfeasibleWarning():
         try:
             nlp_args = dict(config.nlp_solver_args)
+            elapsed = get_main_elapsed_time(solve_data.timing)
+            remaining = max(config.time_limit - elapsed, 1)
             if config.nlp_solver == 'gams':
-                elapsed = get_main_elapsed_time(solve_data.timing)
-                remaining = max(config.time_limit - elapsed, 1)
                 nlp_args['add_options'] = nlp_args.get('add_options', [])
                 nlp_args['add_options'].append('option reslim=%s;' % remaining)
+            elif config.nlp_solver == 'multisolve':
+                nlp_args['time_limit'] = min(nlp_args.get('time_limit', float('inf')), remaining)
             results = nlp_solver.solve(nlp_model, **nlp_args)
         except ValueError as err:
             if 'Cannot load a SolverResults object with bad status: error' in str(err):
@@ -200,11 +204,13 @@ def solve_MINLP(model, solve_data, config):
                            config.minlp_solver)
     with SuppressInfeasibleWarning():
         minlp_args = dict(config.minlp_solver_args)
+        elapsed = get_main_elapsed_time(solve_data.timing)
+        remaining = max(config.time_limit - elapsed, 1)
         if config.minlp_solver == 'gams':
-            elapsed = get_main_elapsed_time(solve_data.timing)
-            remaining = max(config.time_limit - elapsed, 1)
             minlp_args['add_options'] = minlp_args.get('add_options', [])
             minlp_args['add_options'].append('option reslim=%s;' % remaining)
+        elif config.minlp_solver == 'multisolve':
+            minlp_args['time_limit'] = min(minlp_args.get('time_limit', float('inf')), remaining)
         results = minlp_solver.solve(model, **minlp_args)
 
     subprob_result = SubproblemResult()
