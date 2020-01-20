@@ -75,6 +75,10 @@ class Multisolve(object):
             try:
                 pool = Pool(processes=2, maxtasksperchild=1)
                 for solver, solver_args in zip(config.solvers, config.solver_args):
+                    if solver == 'gams' and config.time_limit < float('inf'):
+                        solver_args = dict(solver_args)
+                        solver_args['add_options'] = solver_args.get('add_options', [])
+                        solver_args['add_options'].append('option reslim=%s;' % config.time_limit)
                     results.append(pool.apply_async(
                         _solve_model, args=(model.clone(), solver, solver_args)))
                 pool.close()
@@ -119,7 +123,7 @@ class Multisolve(object):
                     if solution_found:
                         break
                     elapsed = timeit.default_timer() - start_time
-                    if elapsed >= config.time_limit:
+                    if elapsed >= config.time_limit + 5:
                         break
                     results = [r for r in results if r not in finished_results]
                 del results
