@@ -90,9 +90,9 @@ class ConstraintToVarBoundTransform(IsomorphicTransformation):
             if var is not None and var.value is not None:
                 _adjust_var_value_if_not_feasible(var)
 
-            # if (config.detect_fixed and var.has_lb() and var.has_ub() and
-            #         fabs(value(var.lb) - value(var.ub)) <= config.tolerance):
-            #     var.fix(var.lb)
+            if (config.detect_fixed and var.has_lb() and var.has_ub() and
+                    fabs(value(var.lb) - value(var.ub)) <= config.tolerance):
+                var.fix(var.lb)
 
             constr.deactivate()
 
