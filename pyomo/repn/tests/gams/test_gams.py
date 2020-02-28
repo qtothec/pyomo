@@ -20,8 +20,7 @@ import pyutilib.th as unittest
 from pyomo.core.base import NumericLabeler, SymbolMap
 from pyomo.environ import (Block, ConcreteModel, Connector, Constraint,
                            Objective, TransformationFactory, Var, exp, log,
-                           ceil, floor, asin, acos, atan, asinh, acosh, atanh
-			   Binary)
+                           ceil, floor, asin, acos, atan, asinh, acosh, atanh, Binary, quicksum)
 from pyomo.repn.plugins.gams_writer import (StorageTreeChecker,
                                             expression_to_string,
                                             split_long_line)
