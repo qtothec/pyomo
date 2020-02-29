@@ -22,11 +22,17 @@ from pyutilib.math.util import isclose
 from .symbol_map import SymbolMap
 from . import expr_common as common
 from .expr_errors import TemplateExpressionError
+
+from pyomo.core.expr.logicalvalue import (
+    LogicalValue,)
+
+
 from pyomo.core.expr.numvalue import (
     nonpyomo_leaf_types,
     native_numeric_types,
-    value,
-)
+    value,)
+
+
 # NOTE: This module also has dependencies on numeric_expr; however, to
 # avoid circular dependencies, we will NOT import them here.  Instead,
 # until we can resolve the circular dependencies, they will be injected
@@ -887,14 +893,23 @@ class _EvaluationVisitor(ExpressionValueVisitor):
 
         Return True if the node is not expanded.
         """
+
         if node.__class__ in nonpyomo_leaf_types:
             return True, node
+
+        if isinstance(node, LogicalValue):
+            if node.is_variable_type():
+                return True, value(node)
+            if not node.is_expression_type():
+                return True, value(node)
+            return False, None
 
         if node.is_variable_type():
             return True, value(node)
 
         if not node.is_expression_type():
-            return True, value(node)
+            return True, value(node) 
+            #This line is where the error occurs if I skip assigning values
 
         return False, None
 

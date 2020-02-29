@@ -9,6 +9,7 @@
 #  ___________________________________________________________________________
 
 from pyomo.core.expr.numvalue import *
+from pyomo.core.expr.logicalvalue import *
 from pyomo.core.kernel.component_map import ComponentMap
 from pyomo.core.kernel.objective import (minimize,
                                          maximize)
@@ -26,7 +27,9 @@ from pyomo.core.base.check import *
 from pyomo.core.base.sets import *
 from pyomo.core.base.param import *
 from pyomo.core.base.var import *
+from pyomo.core.base.boolean_var import *
 from pyomo.core.base.constraint import *
+from pyomo.core.base.logical_statement import *
 from pyomo.core.base.objective import *
 from pyomo.core.base.connector import *
 from pyomo.core.base.sos import *

@@ -4,20 +4,19 @@
     Francisco Trespalacios and Ignacio E. Grossmann, 2015
 
     Pyomo model implementation by @RomeoV
+    Minor revisions by @qtothec
 
     Optimal solution (for random seed 1, with T=10): 1208.998
 """
 
 from random import randint, seed
-from pyomo.environ import \
-    (ConcreteModel, Constraint, Set, RangeSet, Param,
-     Objective, Var, NonNegativeReals, Block,
-     TransformationFactory, SolverFactory)
+
+from pyomo.core.expr.logical_expr import Or
+from pyomo.environ import (
+    ConcreteModel, Constraint, Set, RangeSet, Param,
+    Objective, Var, NonNegativeReals, Block,
+    TransformationFactory, SolverFactory, LogicalStatement, BooleanVar)
 from pyomo.gdp import Disjunct
-from pyomo.contrib.logical_expression_system.nodes import \
-    (LeafNode, NotNode, EquivalenceNode, OrNode)
-from pyomo.contrib.logical_expression_system.util import \
-    (bring_to_conjunctive_normal_form, CNF_to_linear_constraints)
 
 
 def build_model():
@@ -58,9 +57,15 @@ def build_model():
                      doc='long-term minimum purchase amount')
 
     # Contract choices 'standard', 'bulk' and long term contracts '0','1',...
+    time_time_choices = [(t1, str(t2)) for t1, t2 in m.T * m.T if t2 <= m.T_max - t1]
+    time_special_choices = [(t, s) for t in m.T for s in {'S', 'B', '0'}]
+    m.contract_time_choices = Set(initialize=time_time_choices + time_special_choices)
     m.disjunct_choices = Set(
         initialize=['S', 'B', *[str(t) for t in range(m.T_max)]])
-    m.disjuncts = Disjunct(m.T, m.disjunct_choices)
+    m.disjuncts = Disjunct(m.contract_time_choices)
+    m.Y = BooleanVar(m.contract_time_choices)
+    for t, c in m.contract_time_choices:
+        m.Y[t, c].set_binary_var(m.disjuncts[t, c].indicator_var)
 
     # Create disjuncts for contracts in each timeset
     for t in m.T:
@@ -92,18 +97,13 @@ def build_model():
     # Connect the disjuncts indicator variables using logical expressions
     m.logical_blocks = Block(range(1, m.T_max+1))
 
-    not_y_1_0 = NotNode(LeafNode(m.disjuncts[1, '0'].indicator_var))
-    bring_to_conjunctive_normal_form(not_y_1_0)
-    CNF_to_linear_constraints(m.logical_blocks[1], not_y_1_0)
+    m.logical_blocks[1].not_y_1_0 = LogicalStatement(expr=~m.Y[1, '0'], doc="no pre-existing long-term contract")
 
     # Long-term contract implies '0'-disjunct in following timesteps
     for t in range(2, m.T_max+1):
-        l1 = LeafNode(m.disjuncts[t, '0'].indicator_var)
-        or_node = OrNode([LeafNode(m.disjuncts[t_, str(q)].indicator_var)
-                          for t_ in range(1, t) for q in range(t-t_, m.T_max-t_+1)])
-        equivalence_node = EquivalenceNode(l1, or_node)
-        bring_to_conjunctive_normal_form(equivalence_node)
-        CNF_to_linear_constraints(m.logical_blocks[t], equivalence_node)
+        m.logical_blocks[t].equiv = LogicalStatement(
+            expr=m.Y[t, '0'].equivalent_to(Or(m.Y[t_, str(q)] for t_ in range(1, t) for q in range(t-t_, m.T_max-t_+1)))
+        )
 
     # Objective function
     m.objective = Objective(expr=sum(m.alpha[t]*m.s[t]+m.c[t] for t in m.T))
@@ -189,6 +189,7 @@ if __name__ == "__main__":
     m = build_model()
 
     # m.pprint('model.log')
+    TransformationFactory('core.logical_to_linear').apply_to(m)
     m_trafo = TransformationFactory('gdp.chull').create_using(m)
     # m_trafo = TransformationFactory('gdp.bigm').create_using(m, bigM=5000)
     # res = SolverFactory('gams').solve(m_trafo, solver='cbc', tee=True)

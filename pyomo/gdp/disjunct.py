@@ -16,8 +16,8 @@ from weakref import ref as weakref_ref
 from pyomo.common.modeling import unique_component_name
 from pyomo.common.timing import ConstructionTimer
 from pyomo.core import (
-    ModelComponentFactory, Binary, Block, Var, ConstraintList, Any
-)
+    ModelComponentFactory, Binary, Block, Var, ConstraintList, Any,
+    LogicalStatementList, LogicalValue)
 from pyomo.core.base.component import (
     ActiveComponent, ActiveComponentData, ComponentData
 )
@@ -208,6 +208,13 @@ class _DisjunctionData(ActiveComponentData):
                 except AttributeError:
                     isexpr = False
                 if not isexpr or not _tmpe.is_relational():
+                    try:
+                        isvar = _tmpe.is_variable_type()
+                    except AttributeError:
+                        isvar = False
+                    if isvar and _tmpe.is_relational():
+                        expressions.append(_tmpe)
+                        continue
                     msg = "\n\tin %s" % (type(e),) if e_iter is e else ""
                     raise ValueError(
                         "Unexpected term for Disjunction %s.\n"
@@ -231,8 +238,12 @@ class _DisjunctionData(ActiveComponentData):
                 comp._autodisjuncts.construct()
             disjunct = comp._autodisjuncts[len(comp._autodisjuncts)]
             disjunct.constraint = c = ConstraintList()
+            disjunct.prepositions = p = LogicalStatementList()
             for e in expressions:
-                c.add(e)
+                if isinstance(e, LogicalValue):
+                    p.add(e)
+                else:
+                    c.add(e)
             self.disjuncts.append(disjunct)
 
 
