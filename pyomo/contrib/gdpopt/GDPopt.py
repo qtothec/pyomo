@@ -208,7 +208,7 @@ San Diego, 2018.
 - LOA algorithm:
 Türkay, M; Grossmann, IE.
 Logic-based MINLP algorithms for the optimal synthesis of process networks.
-Comp. and Chem. Eng. 1996, 20(8), 959–978.
+Comp. and Chem. Eng. 1996, 20(8), 959-978.
 DOI: 10.1016/0098-1354(95)00219-7.
             """.strip()
         elif config.strategy == "GLOA":
