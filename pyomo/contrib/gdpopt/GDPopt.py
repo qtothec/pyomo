@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Main driver module for GDPopt solver.
 
 20.2.28 changes:
