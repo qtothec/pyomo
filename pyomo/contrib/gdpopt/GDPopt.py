@@ -205,7 +205,7 @@ San Diego, 2018.
             to_cite_text += "\n"
             to_cite_text += """
 - LOA algorithm:
-Türkay, M; Grossmann, IE.
+Turkay, M; Grossmann, IE.
 Logic-based MINLP algorithms for the optimal synthesis of process networks.
 Comp. and Chem. Eng. 1996, 20(8), 959-978.
 DOI: 10.1016/0098-1354(95)00219-7.
