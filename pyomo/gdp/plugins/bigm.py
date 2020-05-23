@@ -18,7 +18,7 @@ from pyomo.contrib.fbbt.interval import inf
 from pyomo.core import (
     Block, Connector, Constraint, Param, Set, Suffix, Var,
     Expression, SortComponents, TraversalStrategy, value,
-    RangeSet, NonNegativeIntegers)
+    RangeSet, NonNegativeIntegers, LogicalStatement)
 from pyomo.core.base.external import ExternalFunction
 from pyomo.core.base import Transformation, TransformationFactory
 from pyomo.core.base.component import ComponentUID, ActiveComponent
@@ -27,11 +27,12 @@ from pyomo.core.kernel.component_map import ComponentMap
 from pyomo.core.kernel.component_set import ComponentSet
 import pyomo.core.expr.current as EXPR
 from pyomo.gdp import Disjunct, Disjunction, GDP_Error
-from pyomo.gdp.util import (target_list, is_child_of, get_src_disjunction,
-                            get_src_constraint, get_transformed_constraints,
-                            _get_constraint_transBlock, get_src_disjunct,
-                            _warn_for_active_disjunction,
-                            _warn_for_active_disjunct)
+from pyomo.gdp.util import (
+    _warn_for_active_logical_statement, target_list, is_child_of, get_src_disjunction,
+    get_src_constraint, get_transformed_constraints,
+    _get_constraint_transBlock, get_src_disjunct,
+    _warn_for_active_disjunction,
+    _warn_for_active_disjunct, )
 from pyomo.gdp.plugins.gdp_var_mover import HACK_GDP_Disjunct_Reclassifier
 from pyomo.repn import generate_standard_repn
 from pyomo.common.config import ConfigBlock, ConfigValue
@@ -163,6 +164,7 @@ class BigM_Transformation(Transformation):
             Disjunction: self._warn_for_active_disjunction,
             Disjunct:    self._warn_for_active_disjunct,
             Block:       self._transform_block_on_disjunct,
+            LogicalStatement: self._warn_for_active_logical_statement,
             ExternalFunction: False,
         }
 
@@ -544,6 +546,10 @@ class BigM_Transformation(Transformation):
     def _warn_for_active_disjunct(self, innerdisjunct, outerdisjunct, bigMargs,
                                   arg_list, suffix_list):
         _warn_for_active_disjunct(innerdisjunct, outerdisjunct, NAME_BUFFER)
+
+    def _warn_for_active_logical_statement(
+            self, logical_statment, disjunct, infodict, bigMargs, suffix_list):
+        _warn_for_active_logical_statement(logical_statment, disjunct, NAME_BUFFER)
 
     def _transform_block_on_disjunct(self, block, disjunct, bigMargs, arg_list,
                                      suffix_list):
