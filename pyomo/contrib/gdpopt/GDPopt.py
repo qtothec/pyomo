@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """Main driver module for GDPopt solver.
 
+20.5.23 changes:
+- Minor unicode and documentation changes.
 20.2.28 changes:
 - bugfixes on tests
 20.1.22 changes:
@@ -68,9 +69,8 @@ class GDPoptSolver(object):
     These approaches include:
 
     - Logic-based outer approximation (LOA)
+    - Global logic-based outer approximation (GLOA)
     - Logic-based branch-and-bound (LBB)
-    - Partial surrogate cuts [pending]
-    - Generalized Bender decomposition [pending]
 
     This solver implementation was developed by Carnegie Mellon University in the
     research group of Ignacio Grossmann.
@@ -80,7 +80,7 @@ class GDPoptSolver(object):
     Questions: Please make a post at StackOverflow and/or contact Qi Chen
     <https://github.com/qtothec>.
 
-    Several key GDPopt components were prototyped by BS and MS students:
+    Several key GDPopt components were developed/prototyped by BS and MS students:
 
     - Logic-based branch and bound: Sunjeev Kale
     - MC++ interface: Johnny Bates
@@ -206,9 +206,9 @@ San Diego, 2018.
             to_cite_text += "\n"
             to_cite_text += """
 - LOA algorithm:
-Türkay, M; Grossmann, IE.
+Turkay, M; Grossmann, IE.
 Logic-based MINLP algorithms for the optimal synthesis of process networks.
-Comp. and Chem. Eng. 1996, 20(8), 959–978.
+Comp. and Chem. Eng. 1996, 20(8), 959-978.
 DOI: 10.1016/0098-1354(95)00219-7.
             """.strip()
         elif config.strategy == "GLOA":
